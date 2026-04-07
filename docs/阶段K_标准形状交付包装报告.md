@@ -10,6 +10,17 @@
 - **profile 选择**
 - **统一推理入口**
 
+当前这份阶段 K 报告直接对应的对象主要是：
+
+- **Qwen standard-shape 路线**
+
+也就是：
+
+- `stage_j_full_square`
+- `stage_j_full_square_tiny_a`
+
+当前 `Llama-3.2-3B` 虽然已经完成了 Stage I / Stage J 和真实 3B correctness 验证，但**尚未独立推进到 Llama 专属的 Stage K release 包装**。
+
 而不是：
 
 - 再做协变恢复

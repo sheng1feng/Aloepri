@@ -2082,9 +2082,73 @@ conda run --no-capture-output -n qwen-transformers python scripts/infer_stage_k_
 
 > **阶段 K 已经把 standard-shape full-layer 路线整理成“有 profile、可选配置、可直接推理”的交付形态。**
 
+补充说明：
+
+- 当前阶段 K 的这一轮完成，直接对应的是 **Qwen standard-shape 路线**
+- 也就是：
+  - `stage_j_full_square`
+  - `stage_j_full_square_tiny_a`
+- `Llama-3.2-3B` 当前已经完成 Stage I / Stage J 和真实 4090 correctness 验证，但**尚未独立完成 Llama 专属的 Stage K release 包装**
+
 ---
 
-## 18. 当前复现与论文完整版的差异
+## 18. Qwen 与 Llama 路线区分
+
+当前仓库中同时存在两条相关但不完全相同的路线：
+
+### Qwen 主线
+
+Qwen 是当前仓库最完整的主线，已经完成：
+
+- 阶段 A～H：主方法链
+- 阶段 I：标准入口
+- 阶段 J：standard-shape full-layer
+- 阶段 J（噪声）：非零工作点定标
+- 阶段 K：统一交付包装
+
+因此当前 Qwen 路线已经达到：
+
+> **研究复现主链 + standard-shape full-layer + release 交付包装**
+
+### Llama-3.2-3B 扩展线
+
+Llama 当前不是从 A 开始重新独立推进，而是在 Qwen 主线已成立后，优先完成：
+
+- `LlamaArchitectureAdapter`
+- Stage I 标准 HF 工件
+- Stage J standard-shape full-layer
+- 云端真实 4090 correctness 验证
+
+当前 Llama 已完成：
+
+- 本机 mock 闭环
+- 云端真实 Stage I artifact sanity / remote validation
+- 云端真实 Stage J remote validation
+
+当前 Llama 尚未独立完成：
+
+- Llama 专属 Stage K release 包装
+- vLLM 实跑
+- 安全评估
+
+但当前已经具备继续推进所需的脚本：
+
+- `scripts/run_stage_j_llama_real_noise_calibration.py`
+- `scripts/export_stage_k_llama_release.py`
+- `scripts/run_llama_3b_stagek_pipeline.sh`
+
+更准确的项目状态表述应为：
+
+> **Qwen 主线已经完成 A–K；Llama-3.2-3B 已完成结构接入、Stage I、Stage J 和真实 4090 correctness 验证，但尚未独立推进到 Stage K release。**
+
+相关补充文档：
+
+- `docs/Qwen与Llama复现阶段区分说明.md`
+- `docs/Llama-3.2-3B标准形状恢复报告.md`
+
+---
+
+## 19. 当前复现与论文完整版的差异
 
 尽管已经做到阶段 H，但当前实现仍然不是论文完整版 AloePri。
 
@@ -2126,7 +2190,7 @@ conda run --no-capture-output -n qwen-transformers python scripts/infer_stage_k_
 
 ---
 
-## 19. 阶段 A～K 的总体结论
+## 20. 阶段 A～K 的总体结论
 
 ### 阶段 A
 
@@ -2273,7 +2337,7 @@ conda run --no-capture-output -n qwen-transformers python scripts/infer_stage_k_
 
 ---
 
-## 20. 当前正式判定
+## 21. 当前正式判定
 
 基于当前全部实验和数据，可以给出如下正式判定：
 
@@ -2296,7 +2360,7 @@ conda run --no-capture-output -n qwen-transformers python scripts/infer_stage_k_
 
 ---
 
-## 21. 下一步建议
+## 22. 下一步建议
 
 当前最合理的下一步已经不再是继续验证“standard-shape 路线是否可行”，因为这件事已经完成。现在更合理的方向是：
 
@@ -2345,7 +2409,7 @@ conda run --no-capture-output -n qwen-transformers python scripts/infer_stage_k_
 
 ---
 
-## 22. 结语
+## 23. 结语
 
 当前复现路线的最大价值不在于“已经完整复现论文全部工程细节”，而在于：
 

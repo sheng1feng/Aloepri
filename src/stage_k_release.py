@@ -13,6 +13,7 @@ class StageKProfile:
     source_dir: str
     description: str
     recommended_use: str
+    regression_file: str | None = None
 
 
 def default_stage_k_profiles() -> list[StageKProfile]:
@@ -22,12 +23,14 @@ def default_stage_k_profiles() -> list[StageKProfile]:
             source_dir="artifacts/stage_j_full_square",
             description="Zero-noise standard-shape full-layer checkpoint with near-exact correctness.",
             recommended_use="Regression baseline, correctness debugging, deterministic demos.",
+            regression_file="outputs/stage_j/full_layers_square_export_regression.json",
         ),
         StageKProfile(
             name="tiny_a",
             source_dir="artifacts/stage_j_full_square_tiny_a",
             description="Recommended non-zero noise standard-shape full-layer checkpoint.",
             recommended_use="Default delivery profile when non-zero obfuscation noise is required.",
+            regression_file="outputs/stage_j/full_layers_square_tiny_a_export_regression.json",
         ),
     ]
 
@@ -40,19 +43,11 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _profile_summary(profile: StageKProfile, source_dir: Path) -> dict[str, Any]:
     metadata = _load_json(source_dir / "stage_i_metadata.json")
-    regression_candidates = [
-        Path("outputs/stage_j/full_layers_square_export_regression.json"),
-        Path("outputs/stage_j/full_layers_square_tiny_a_export_regression.json"),
-    ]
     regression = {}
-    for candidate in regression_candidates:
+    if profile.regression_file is not None:
+        candidate = Path(profile.regression_file)
         if candidate.exists():
-            if profile.name == "stable_reference" and "tiny_a" not in candidate.name:
-                regression = _load_json(candidate)
-                break
-            if profile.name == "tiny_a" and "tiny_a" in candidate.name:
-                regression = _load_json(candidate)
-                break
+            regression = _load_json(candidate)
     return {
         "name": profile.name,
         "description": profile.description,
@@ -82,6 +77,9 @@ def export_stage_k_release(
     *,
     profiles: list[StageKProfile] | None = None,
     materialize: bool = False,
+    recommended_profile: str = "tiny_a",
+    stable_reference_profile: str = "stable_reference",
+    title: str = "Stage-K Standard-Shape Release",
 ) -> dict[str, Any]:
     export_dir = Path(export_dir)
     profiles_dir = export_dir / "profiles"
@@ -102,8 +100,8 @@ def export_stage_k_release(
         "materialized": bool(materialize),
         "profiles_dir": "profiles",
         "profiles": profile_summaries,
-        "recommended_profile": "tiny_a",
-        "stable_reference_profile": "stable_reference",
+        "recommended_profile": recommended_profile,
+        "stable_reference_profile": stable_reference_profile,
     }
     (export_dir / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -120,7 +118,7 @@ def export_stage_k_release(
     )
 
     readme = [
-        "# Stage-K Standard-Shape Release",
+        f"# {title}",
         "",
         "This bundle collects the validated standard-shape full-layer checkpoints.",
         "",

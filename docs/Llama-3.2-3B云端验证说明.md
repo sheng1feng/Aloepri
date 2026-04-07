@@ -48,6 +48,9 @@
 - `scripts/export_stage_j_llama_real_checkpoint.py`
 - `scripts/run_llama_baseline_smoke.py`
 - `scripts/run_llama_3b_server_pipeline.sh`
+- `scripts/run_stage_j_llama_real_noise_calibration.py`
+- `scripts/export_stage_k_llama_release.py`
+- `scripts/run_llama_3b_stagek_pipeline.sh`
 
 ## 4. 云端推荐执行顺序
 
@@ -202,6 +205,21 @@ bash scripts/run_llama_3b_server_pipeline.sh
 REPO_DIR=/your/repo MODEL_DIR=/your/model/path bash scripts/run_llama_3b_server_pipeline.sh
 ```
 
+### 4.5 推进到 Llama Stage K
+
+如果你要继续把 Llama 路线推进到与 Qwen 更接近的交付层级，再执行：
+
+```bash
+bash scripts/run_llama_3b_stagek_pipeline.sh
+```
+
+这会额外完成：
+
+1. 真实噪声定标
+2. `tiny_a` 真实工件导出
+3. `tiny_a` correctness 验证
+4. `artifacts/stage_k_llama_release/` 导出
+
 ## 5. 当前结论
 
 当前代码层面已经把云端验证需要的脚本准备好了：
@@ -217,3 +235,31 @@ REPO_DIR=/your/repo MODEL_DIR=/your/model/path bash scripts/run_llama_3b_server_
 因此当前阶段的定位是：
 
 > **本机负责把脚本和导出链路准备好，云端负责真实 3B 推理验证。**
+
+---
+
+## 6. 已完成的云端验证结果
+
+当前已在 4090 云服务器上成功完成：
+
+- baseline smoke
+- Stage I 真实导出
+- Stage I artifact sanity
+- Stage I remote validation
+- Stage J 真实 full-layer 导出
+- Stage J remote validation
+
+对应结果文件：
+
+- `outputs/stage_i_llama/real_artifact_sanity.json`
+- `outputs/stage_i_llama/real_remote_validation.json`
+- `outputs/stage_j_llama/real_remote_validation.json`
+
+关键结论：
+
+- Stage I：严格成立（full logits = 0，generation 完全一致）
+- Stage J：generation 完全一致，logits 存在小幅偏差但不影响恢复正确性
+
+因此这套脚本现在已经不是“准备好待验证”，而是：
+
+> **已经在真实 `Llama-3.2-3B` + 4090 环境上完成过一轮完整验证。**

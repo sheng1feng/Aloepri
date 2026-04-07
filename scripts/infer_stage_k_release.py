@@ -10,7 +10,7 @@ if str(ROOT) not in sys.path:
 
 import torch
 
-from src.model_loader import format_chat_prompt
+from src.llama_local_dev import tokenize_llama_prompt
 from src.stage_i_vllm import load_stage_i_hf_bundle
 from src.transforms import map_input_ids, restore_logits
 
@@ -46,8 +46,7 @@ def main() -> None:
     model = bundle["model"]
     perm_vocab = bundle["perm_vocab"]
 
-    text = format_chat_prompt(tokenizer, args.prompt)
-    encoded = tokenizer(text, return_tensors="pt")
+    encoded = tokenize_llama_prompt(tokenizer, args.prompt, device="cpu")
     current_ids = encoded["input_ids"].clone()
     generated_ids: list[int] = []
 
