@@ -41,6 +41,7 @@ def test_stage_j_square_model_builds_on_tiny_llama() -> None:
     assert stage_model.config.model_type == "llama"
     assert stage_model.model.embed_tokens.weight.shape == model.model.embed_tokens.weight.shape
     assert stage_model.lm_head.weight.shape == model.lm_head.weight.shape
+    assert stage_model.lm_head.weight.device == model.lm_head.weight.device
     assert perm_vocab.shape[0] == config.vocab_size
     assert inv_perm_vocab.shape[0] == config.vocab_size
     assert transform.dim == config.hidden_size

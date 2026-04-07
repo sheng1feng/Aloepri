@@ -253,6 +253,7 @@ def build_stage_j_square_model(
         global_scale=global_scale,
     )
     movable_ids = ordinary_token_ids(tokenizer)
+    model_device = next(stage_model.parameters()).device
     original_head_weight = stage_model.lm_head.weight.detach().cpu().to(torch.float32).clone()
     original_head_bias = None
     if getattr(stage_model.lm_head, "bias", None) is not None:
@@ -277,7 +278,7 @@ def build_stage_j_square_model(
             stage_model.lm_head.in_features,
             stage_model.lm_head.out_features,
             bias=original_head_bias is not None,
-        )
+        ).to(device=model_device, dtype=stage_model.lm_head.weight.dtype)
         with torch.no_grad():
             head_weight = original_head_weight
             if handoff_layer is None:
@@ -309,6 +310,7 @@ def build_stage_j_square_model(
                 permute_rmsnorm_weight_for_square(stage_model.model.norm.weight.detach(), transform).to(stage_model.model.norm.weight.dtype)
             )
 
+    stage_model.to(device=model_device)
     stage_model.eval()
     return stage_model, perm_vocab, inv_perm_vocab, transform
 
