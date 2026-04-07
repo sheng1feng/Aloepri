@@ -1,0 +1,2046 @@
+
+===== PAGE 1 =====
+TOWARDSPRIVACY-PRESERVINGLLM INFERENCE VIA
+COLLABORATIVEOBFUSCATION(TECHNICALREPORT)
+Yu Lin, Qizhi Zhang, Wenqiang Ruan, Daode Zhang, Jue Hong, Ye Wu∗
+ByteDance
+Hanning Xia, Yunlong Mao, Sheng Zhong
+Nanjing University
+ABSTRACT
+The rapid development of large language models (LLMs) has driven the widespread adoption of
+cloud-based LLM inference services, while also bringing prominent privacy risks associated with
+the transmission and processing of private data in remote inference. For privacy-preserving LLM
+inference technologies to be practically applied in industrial scenarios, three core requirements must
+be satisfied simultaneously: (1) Accuracy and efficiency losses should be minimized to mitigate
+degradation in service experience. (2) The inference process can be run on large-scale clusters
+consist of heterogeneous legacy xPUs. (3) Compatibility with existing LLM infrastructures should be
+ensured to reuse their engineering optimizations. To the best of our knowledge, none of the existing
+privacy-preserving LLM inference methods satisfy all the above three constraints while delivering
+meaningful privacy guarantees. In this paper, we propose AloePri, the first privacy-preserving LLM
+inference method for industrial applications. AloePri protects both the input and output data by
+covariant obfuscation, which jointly transforms data and model parameters to achieve better accuracy
+and privacy. We carefully design the transformation for each model component (e.g., Attention,
+FFN) to ensure inference accuracy and data privacy while keeping full compatibility with existing
+infrastructures of Language Model as a Service (LMaaS). AloePri has been integrated into an
+industrial LMaaS system deployed on a multi-node GPU cluster for the evaluation of mainstream
+LLMs. The evaluation on Deepseek-V3.1-Terminus model (671B parameters) demonstrates that
+AloePri causes accuracy loss of 0.0%∼3.5% and exhibits efficiency equivalent to that of plaintext
+inference. Meanwhile, AloePri successfully resists state-of-the-art attacks (e.g., internal state
+inversion), with less than 5% of tokens recovered. To the best of our knowledge, AloePri is the first
+method to exhibit practical applicability to large-scale models in real-world systems.
+KeywordsLarge language model·Privacy-preserving inference·Covariant obfuscation
+1 Introduction
+In the era of large language models (LLMs), a surge in application demands from clients (e.g. financial companies
+and hospitals) drives cloud service providers to offer low-cost language model as a service (LMaaS). However, to use
+LMaaS, clients have to transmit their private data to remote LLM services, bringing severe privacy concerns. While
+resolving the privacy concerns is important, the following three constraints must be satisfied in an industrial scenario
+to keep the product competitiveness and a high return on investment (ROI) when designing privacy-enhancement
+technologies:
+1. Accuracy and Efficiency Constraint.Privacy protection methods must not incur perceptible accuracy
+degradation or efficiency loss. A model performance gap larger than a generational leap (e.g., 88.3% for
+Claude 3.5 Sonnet vs. 85.7% for Claude 3 on MMLU [1]) correlates with perceptible disparities in client-facing
+∗The authors thank Prof. Cong Wang of the City University of Hong Kong for his valuable suggestions on revising this paper.
+arXiv:2603.01499v1  [cs.CR]  2 Mar 2026
+
+===== PAGE 2 =====
+Running Title for Header
+Open-sourced model
+Obfuscatedmodel
+OfflineModel Obfuscation Inference EnginevLLM/SGLang/…
+LLMServer2.Obfuscated model deployment
+#@ 5s8 |(tak …
+? sec & > ei …
+PromptWhat is privacy computing?Model responsePrivacycomputingis a set of technologies
+PermutationNoise addition Matrix masking
+Client
+OnlinePrivateInference
+Deployedobfuscated modelObfuscatedprompt
+Obfuscatedresponse
+1.Modelobfuscation
+3.Promptobfuscation4.Responsede-obfuscation
+Figure 1: Workflow of AloePri. The client locally obfuscates the model and deploys it to the server, and handles
+prompt obfuscation and response de-obfuscation during online phase.
+output quality [2, 3, 4]. End-to-end latency exceeding 100 ms is perceptually discernible to clients [5]. Such
+accuracy and efficiency impairments would result in an unacceptable decline in product competitiveness.
+2. Hardware Compatibility Constraint.LLM inference clusters of cloud service providers typically consist of
+heterogeneous legacy xPUs, e.g., Graphics Processing Units (GPUs), Neural Processing Units (NPUs), and
+Field Programmable Gate Arrays (FPGAs). Therefore, to keep a high ROI, a privacy protection method must
+be able to run on heterogeneous legacy xPUs clusters.
+3. Software Compatibility Constraint.The method should be compatible with existing LLM infrastructures so
+that their engineering optimizations can be reused. The current inference frameworks (e.g., vLLM, SGLang)
+have integrated many software optimizations (e.g., KV Cache, P/D disaggregation). Any privacy protection
+method that is not compatible with these frameworks would require huge engineering efforts to re-implement
+these software optimizations, leading to a low ROI.
+The above constraints severely restrict the applicability of methods based on cryptography or trusted execution en-
+vironment (TEE). While cryptographic methods [ 6, 7] can provide rigorous privacy guarantees, their substantial
+computational overhead and incompatibility with LMaaS infrastructures render them impractical for industrial applica-
+tions. Meanwhile, a large number of existing computing clusters contain legacy xPUs without hardware-native security
+guarantees. Therefore, TEE-based methods [8, 9, 10] cannot be widely deployed in such scenarios.
+While obfuscation-based methods [ 11, 12, 13, 14, 15, 16, 17, 18, 19] are promising for privacy-preserving LLM
+inference because they are efficient and broadly compatible with existing infrastructure, these methods are still far from
+practical usage. To quantify their privacy guarantees, designers typically rely on formal definitions like Differential
+Privacy (DP) [20], Rényi Differential Privacy (RDP) [21], or Probably Approximately Correct (PAC) Privacy [22].
+Building on these techniques and definitions, recent work has proposed obfuscation methods for LLM inference that
+operate at either the token level [11, 12, 13, 14, 15] or the embedding level [16, 17, 18, 19]. Despite their promise,
+such methods suffer poor trade-off between privacy and accuracy. As we show in Section 6, several state-of-the-art
+obfuscation methods [17, 16, 11, 23] suffer an accuracy loss of more than 30% while still being vulnerable to inversion
+attacks that recover over 50% of tokens.
+In this paper, to achieve better privacy, efficiency, and accuracy, we first proposeCovariant Obfuscation-a novel privacy-
+preserving LLM inference mechanism that jointly transforms input data and model weights. By transforming model
+weights to mitigate the impact of input obfuscations during inference, covariant obfuscation can provide a stronger
+privacy guarantee than data-only obfuscation methods at equal model accuracy. Furthermore, we introduce three
+composition theorems (sequential, parallel, and summation) to streamline the construction of covariant obfuscation.
+Second, following covariant obfuscation, we propose AloePri, an Accurate, low-cost, and efficient solution for
+Privacy-preserving LLM inference. As illustrated in Figure 1, model obfuscation is performed offline: the client
+generates a secret token-level permutation and applies it to token-correlated model weights, including the embedding
+layer and model head. Additional Gaussian noise and carefully selected invertible matrices are further employed to
+transform the weights of all model components (e.g., attention, FFN) to hide the secret permutation while preserving
+model inference accuracy. During online inference, the client obfuscates its prompts before sending them to the server
+and decodes the returned responses using the secret permutation. Under this covariant obfuscation, the server observes
+only obfuscated inputs and outputs and thus cannot access the client’s private data.
+We evaluate AloePri via theoretical analysis and empirical experiments. Theoretical analysis characterizes the
+computational error introduced by AloePri, establishes upper bounds on its information leakage, and quantifies the
+corresponding attack success rate. On the other hand, we conduct comprehensive empirical evaluations on mainstream
+2
+
+===== PAGE 3 =====
+Running Title for Header
+open-source LLMs (including Qwen2.5/Qwen3, Llama3, Qwen3-MoE, Deepseek-R1-Distill-Qwen, and Deepseek-
+V3.1-Terminus) and test AloePri’s resilience against representative attacks [24, 25, 26, 27, 28] on privacy-preserving
+LLM inference methods. Experimental results show that AloePri significantly mitigates privacy leakage while
+retaining both model accuracy and inference efficiency. For instance, on Deepseek-V3.1-Terminus,AloePri incurs only
+0%∼3.5% accuracy loss, with fewer than 5% of tokens recovered by several state-of-the-art attacks [24, 25, 26, 27, 28].
+Furthermore, as its inference pipeline remains nearly identical to plaintext inference,AloePri supports direct integration
+into mainstream inference frameworks (e.g., vLLM [29] and SGLang [30]) with negligible efficiency overhead and
+engineering efforts.
+We highlight our contributions as follows:
+• We propose covariant obfuscation, a novel privacy-preserving LLM inference mechanism. We theoretically
+prove that covariant obfuscation delivers a stronger privacy guarantee than data-only obfuscation at an
+equivalent level of accuracy degradation. Furthermore, we formalize its compositional properties, enabling the
+seamless integration into sophisticated LLM architectures (Section 4).
+• Based on the covariant obfuscation mechanism, we propose AloePri that achieves efficiency comparable to
+plaintext model inference, provides robust privacy protection on both input and output data, and incurs slight
+accuracy loss. Notably, AloePri does not change the model structure and is compatible with existing LLM
+infrastructures. (Section 5)
+• We conduct comprehensive experiments to validate the effectiveness ofAloePri. Experimental results across
+multiple datasets and LLMs demonstrate that AloePri significantly outperforms state-of-the-art obfuscation
+methods in both data privacy and model inference accuracy. (Section 6)
+2 Related Works
+2.1 Methods based on Obfuscation
+A series of obfuscation-based methods have been proposed for privacy-preserving LLM inference, primarily via three
+techniques: token substitution [11, 23, 12, 15], embedding transformation [16, 18, 17, 31, 32, 19], LLM-aided rewriting
+[14, 33].
+Token Substitution.Since prompts are composed of a sequence of tokens, the most intuitive privacy preservation
+method is to substitute sensitive tokens within the text. SANTEXT [23] and RANTEXT [11] leverage local differential
+privacy to replace sensitive tokens with alternatives based on token embedding similarity. ProSan [15] quantifies word
+importance and privacy risk to dynamically balance accuracy and privacy. However, these methods only protect a
+limited set of sensitive tokens and lack semantic-level protection. Moreover, if substituted tokens correlate with task
+objectives, they undermine the consistency between input text and task intent.
+Embedding Transformation.Some studies obfuscate the token embeddings of input data to achieve semantic-level
+privacy protection. SGT [ 17] learns an embedding transformation model via a mutual information-based training
+loss, converting raw user inputs into noisy embeddings for secure remote LLM inference. DP-Forward [16] designs a
+differential privacy mechanism to set privacy budgets for high-dimensional embedding perturbation, balancing privacy
+and inference accuracy. STIP [18] adopts feature-space random permutations to enable efficient private inference in a
+three-party scenario. These methods require the client and server to transmit data in the form of embeddings, which
+increases communication overhead. Meanwhile, existing inversion attacks [ 26, 34, 24, 25] pose a critical threat, as
+adversaries can invert obfuscated embeddings to recover the original private texts. In addition, following the framework
+of split inference, some studies deploy part of models at the client side to process and obfuscate data. SnD [32] splits
+LLMs into local/cloud encoders, such that the client can add noise to hidden states outputted by local encoders and use
+pre-trained denoiser on cloud encoders’ outputs to obtain high-quality inference results. NOIR [19] splits open-source
+LLMs into a lightweight client-side encoder/decoder and a cloud-hosted middle layer, which are trained jointly to
+achieve accuracy and privacy. Meanwhile, it introduces the concept of indistinguishability-preserving vocabulary, which
+requires the client to locally randomize token embeddings and process them with the client-side encoder. While split
+inference enables the client to better balance accuracy and privacy, it requires the client to participate in a training
+process and take part of forward computational model layers during inference, which is not compatible with the existing
+LLM infrastructure.
+LLM-aided Rewriting.This type of method leverages LLMs themselves to hide private information in input data.
+PAPILLON [14] deploys a multi-stage LLM pipeline (local + internet models) to preserve privacy while maintaining
+high task response quality. EmojiPrompt [33] leverages cloud-hosted LLMs to rewrite private texts with special symbols
+3
+
+===== PAGE 4 =====
+Running Title for Header
+and emojis. These methods rely on LLMs deployed in a trusted local or third-party environment to perform private text
+rewriting, and quantifying the privacy guarantees of the rewritten texts remains a significant challenge.
+2.2 Methods based on Cryptography and TEE
+Cryptographic primitives provide rigorous privacy guarantees, spurring many cryptography-based methods [6, 7, 35].
+Gupta et al. [6] combine additive secret sharing (ASS) and function secret sharing for efficient online inference at the
+cost of massive offline computation and communication overhead. Zhang et al. [7] implement one-round inference
+via fully homomorphic encryption (FHE). Some studies [35] combine ASS and FHE to balance communication and
+computation overhead. Li et al. [36] optimize such methods by modifying activation functions. Despite recent advances,
+these methods remain far from practical. For example, BumbleBee [35] takes about 8 minutes to generate a single token
+for LLaMA-7B.
+TEE-based methods constitute another key route for privacy-preserving LLM inference. PipeLLM [8] and ccAI [37]
+leverage GPU-TEE to enable confidential LMaaS. By adopting speculative pipelined encryption, PipeLLM limits the
+additional throughput overhead to less than 20% for LLMs with parameter sizes spanning 13B to 175B. ccAI adds
+an additional FPGA-based PCI link to secure PCIe packet transmission across diverse xPU types without requiring
+modifications to applications or drivers. While these methods have promising efficiency, they are either not suitable for
+heterogeneous legacy xPU clusters or require a huge hardware retrofit cost. Additionally, several approaches [38, 9, 10]
+have been proposed to leverage CPU-TEE and legacy GPUs for privacy-preserving inference. However, frequent data
+transfers between CPU-TEE and legacy GPUs render these methods incompatible with key optimizations in modern
+LLM infrastructure (e.g., KV Cache, P/D disaggregation).
+3 Preliminaries
+3.1 System Model
+We focus on the general scenario of LMaaS. Aclientholding private data aims to access the LLM inference service
+provided by a cloudserver. The client is only capable of undertaking a certain level of computational overhead during
+the offline phase. Meanwhile, during the online inference phase, to avoid compromising inference throughput, they
+can only handle lightweight computational tasks. The LLM inference service provided shall be compatible with the
+interfaces of modern LLM frameworks, i.e., the service takes prompts as inputs and outputs inference results via
+one-round communication. For instance, a software company requests a remote LLM server to use code generation
+agents.
+3.2 Threat Model
+Our goal is to protect the private prompt and model response during LLM inference. We assume the server is honest-
+but-curious: it faithfully provides the inference service but actively seeks to learn the client’s private information. The
+attacker can access the model and observe the service’s inputs and outputs. For example, the attacker can try recovering
+users’ private data through the following three methods: 1)Obfuscation recovery: the attacker knows the obfuscation
+mechanism and tries to breach it by exploiting its structural weaknesses [34, 25]. 2)Training-based inversion: the
+attacker can use substantial computational resources to recover private data via dedicated training-based inversion
+[24, 26]. 3)Token-frequency exploitation: the attacker continuously monitors input and output tokens and records
+their frequencies over time to infer private information [27].
+3.3 Notations
+We use V and θ to represent the vocabulary and model weights, respectively. n denotes the number of tokens, and
+d represents the hidden size. Throughout this paper, Sn is defined as the permutation group over [1, n], Od is the
+orthogonal group of d×d matrices, and idA denotes the identity transformation on the space A. Noised data is denoted
+by □⋆, while randomly sampled data is marked with ˆ□, ande□ denotes obfuscated model weights. We use I(x;y) to
+denote the mutual information between two random variables x and y, and H(x) represents the information entropy of
+x. We summarize all notations used in this paper in Appendix A.
+4
+
+===== PAGE 5 =====
+Running Title for Header
+3.4 Large Language Model
+3.4.1 Model Structure
+A typical LLM consists of a vocabulary V with n tokens, as well as five key components: an embedding layer, a model
+head,Lattention layers,Lfeed-forward network (FFN) layers, and multiple normalization layers.
+Vocabulary, Embeddings, and Model Head.The vocabulary V and corresponding merge rules serve to tokenize
+textual prompts into a sequence of token indices. The weight matrix of the embedding layer Wembed is an n×d -
+dimensional matrix, and that of the model’s head layerWhead is a d×n -dimensional matrix. Each token index in V
+corresponds to ad-dimensional vector inW embed andW head, respectively.
+FFN. The structures of FFN vary between two types of LLMs: dense models and Mixture-of-Experts (MoE) models
+[39]. In dense models, each FFN layer consists of three sets of weights, denoted as ωffn = (Wgate, Wup, Wdown). Given
+the hidden statesxas input, the forward pass output of the FFN can be calculated as:
+fffn(x, ωffn) = (SiLU(xWgate)⊙(xW up))W down,(1)
+where SiLU is a commonly used activation function in LLMs, and ⊙ denotes the Hadamard product. In MoE models,
+each expert corresponds to an FFN layer with the same structure as that in dense models. Furthermore, an expert router
+(denoted asW router) is employed to select activated experts during model inference.
+Attention Layer. In this paper, we mainly consider four popular attention mechanisms: Multi-head Attention (MHA)
+[40], Multi-Query Attention (MQA) [41], Grouped-Query Attention (GQA) [42], and Multi-head Latent Attention
+(MLA) [43]. The weights of the attention layer can be denoted as ωattn = (W q, Wk, Wv, Wo). We define the total
+number of attention heads as m, and the number of heads corresponding to the attention key and value weights as mkv.
+For example, m
+mkv
+>1 for GQA, m
+mkv
+= 1 for MHA, and m
+mkv
+=m for MQA. Taking GQA as an example, the attention
+weights can be split by the number of heads as: Wq =
+h
+W (1)
+q . . . W (m)
+q
+i
+, Wk =
+h
+W (1)
+k . . . W (mkv)
+k
+i
+, Wv =
+h
+W (1)
+v . . . W (mkv)
+v
+i
+, Wo =
+h
+W (1)
+o . . . W (m)
+o
+iT
+. For the input hidden states x, the attention output of GQA is
+computed as
+fattn(x, ωattn) =
+X
+i
+g
+ 
+G(xW (i)
+q )G(xW η(i)
+k )T
+√dhead
+!
+xW η(i)
+v W (i)
+out.(2)
+In the above equation, i denotes the head index for Wq and Wo, while η(i) represents the corresponding head index for
+Wk and Wv. g denotes the softmax function. G stands for the positional embedding function, such as Rotary Position
+Embeddings (RoPE) [44].
+Layer Normalization. In this paper, we primarily focus on the Root Mean Square Layer Normalization (RMSNorm), the
+most commonly used layer normalization method in modern LLMs. RMSNorm utilizes a weight parameterwnorm and the
+root mean square to normalize an input state x with dimension d, which is calculated as: RMSNorm(x) = x⊙wnorm√
+1
+d
+Pd
+i=1 x2
+i
+.
+3.4.2 Workflow of Auto-regressive Text Generation
+During inference, the model accepts a textual prompt as input. Using the vocabulary V, the prompt is first tokenized
+into a sequence of l tokens T={tok 1, . . . , tokl}, which are further converted to a token index sequence x={x i}l
+i=1.
+Let θ denote the set of all model weights. The model’s forward computation can be formulated asf(x, θ) =y , which
+yields a token index y∈Z n. Specifically, the l token indices first retrieve the corresponding l embeddings via Wembed.
+These embeddings are then fed into the attention and FFN layers to extract semantic information. Finally, the extracted
+features are used to compute logits with Whead, from which the index of the next generated token y is sampled. To
+enable auto-regressive generation, the generated token index y is appended to the original token index sequence x to
+serve as the input for the subsequent inference step.
+4 Covariant Obfuscation
+In this section, we first present the definition of covariant obfuscation and demonstrate its advantages in mitigating
+information leakage compared to traditional data-only obfuscation in LLM inference scenarios. We then introduce three
+composition theorems that allow us to separately design covariant obfuscation for each component of the LLM, and
+subsequently combine these individual covariant obfuscations as a covariant obfuscation for the whole model.
+5
+
+===== PAGE 6 =====
+Running Title for Header
+4.1 Definition and Property
+4.1.1 Covariant Obfuscation on Inference Function
+We consider an inference function f:X×Θ→Y , where X is the data space, Θ is the parameter space, and Y is the
+prediction space, and ˜X, ˜Y , ˜Θ are their obfuscated spaces respectively. A covariant obfuscation C with obfuscation
+error (a constant) eC for the function f can be represented as the following quintuple (ϕX , ϕΘ, ϕY , ψY , ˜f): (1) Data
+obfuscation: ϕX :X→ ˜X. (2) Model transformation: ϕΘ : Θ→ ˜Θ. (3) Label obfuscation: ϕY :Y→ ˜Y . (4) Label
+de-obfuscation ψY : ˜Y→Y . (5) Inference in the obfuscated space: ˜f: ˜X× ˜Θ→ ˜Y . They satisfy the following
+conditions:
+A. Commutation condition: The operations of the obfuscation and the inference function shall be commutative.
+That is, E[d(˜y, ϕY ◦f(x, θ))]≤e C, where ˜y= ˜f(ϕ X(x), ϕΘ(θ)), and d(·,·) is a distance function on ˜Y (e.g.
+Euclid Distance), indicating that the error incurred by the obfuscation is bounded bye C.
+X×Θ
+f
+− − − − − − →Y
+(ϕX ,ϕΘ)
+y ϕY
+y
+˜X× ˜Θ
+˜f
+− − − − − − →˜Y
+B. De-obfuscation condition:ψ Y ◦ϕ Y =id Y , where idY denotes the identity transformation onY.
+Notably, when ˜X=X , ˜Θ = Θ, ˜Y=Y , ϕΘ =id Θ, and ϕY =ψ Y =id Y , the covariant obfuscation degenerates to a
+data-only obfuscation given by ϕX :X→X . We present Theorem 1 to show that covariant obfuscation can achieve
+less privacy leakage under the same accuracy loss than data-only obfuscation for LLM inference.
+Theorem 1.Let f:X×Θ→Y denote a LLM inference function (where X=Z l
+n and Y=Z n ) and D:=
+ϕX(x) denote a data-only obfuscation mechanism. There always exists a covariant obfuscation mechanism C:=
+(ϕX , ϕΘ, ϕY , ψY , ˜f)satisfying thate C =e D andL(C)<L(D).
+Proof.See Appendix B.1.
+4.2 Composition Theorems
+As LLM includes complicated structures, we formalize the compositional theorems (sequential, parallel, and summation)
+of covariant obfuscation to enable the design of covariant obfuscation for basic model components. The proofs of the
+theorems are presented in Appendix B.2.
+4.2.1 Sequential Composition
+We show that two sequentially connected covariant obfuscations designed for two LLM adjacent components (e.g., Wv
+and Wo) still constitute a covariant obfuscation, whose obfuscation error is controlled by the obfuscation errors of two
+original covariant obfuscations.
+Theorem 2(Sequential Composition Theorem f◦g ).Assume that a covariant obfuscation C1 for f:X×Θ→Y ,
+and a covariant obfuscation C2 for g:Y×Ξ→Z satisfying the boundary condition: ϕY |C1 =ϕ Y |C2 (denoted as ϕY
+uniformly below). Then, C2 ◦C 1 := (ϕX ,(ϕ Θ, ϕΞ), ϕZ, ψZ, ˜h) is a covariant obfuscation for h:X×(Θ×Ξ)→Z
+whereh(x,(θ, ξ)) :=g(f(x, θ), ξ).
+Furthermore, let eC1 and eC2 be the obfuscation errors of C1 and C2, respectively. For all ˜y1,˜y2 ∈ ˜Y and ˜ξ∈ ˜Ξ, if
+˜g(˜y,˜ξ)satisfies the Lipschitz condition:
+d(˜g(˜y1, ˜ξ),˜g(˜y2, ˜ξ))≤M g ·d(˜y1,˜y2),
+whereM g is the Lipschitz constant for˜g. The obfuscation error of the series composition satisfies:
+eC2◦C1 ≤M g ·e C1 +e C2 .
+4.2.2 Parallel Composition
+Some LLM components are connected in parallel, e.g., attention queries and keys. When the covariant obfuscations of
+these components are connected in parallel, they also constitute a covariant obfuscation.
+6
+
+===== PAGE 7 =====
+Running Title for Header
+Theorem 3(Parallel Composition Theorem f||g ).Assume that a covariant obfuscation C1 for f:X×Θ→Y
+and a covariant obfuscation C2 for g:X×Ξ→Z satisfying the boundary condition: ϕX|C1
+=ϕ X|C2
+(denoted
+as ϕX uniformly below). Then, C1||C2 := (ϕ X ,(ϕ Θ, ϕΞ),(ϕ Y , ϕZ),(ψ Y , ψZ), ˜h) is a covariant obfuscation for
+h:X×(Θ×Ξ)→Y×Z, whereh(x,(θ, ξ)) := (f(x, θ), g(x, ξ)).
+Furthermore, let eC1 and eC2be the obfuscation errors of C1 and C2, if the distance function dY×Z on Y×Z satisfies
+the control condition with respect to the distance functionsd Y onYandd Z onZ:
+dY×Z ((y1, z1),(y 2, z2))≤d Y (y1, y2) +d Z(z1, z2),
+thene C1||C2 ≤e C1 +e C2.
+4.2.3 Summation Composition
+The covariant obfuscations for bypass computations, e.g., residual connections, can also be composed.
+Theorem 4(Summation Composition Theorem f+g ).Assume that a covariant obfuscation C1 for f:X×Θ→Y
+and a covariant obfuscation C2 for g:X×Ξ→Y satisfying the boundary condition: ϕX|C1
+=ϕ X|C2
+, ϕY|C1
+=
+ϕY|C2
+, ψY|C1
+=ψ X|C2
+(denoted as ϕX , ϕY , ψY uniformly below), where Y and ˜Y are Abelian groups, and ϕY :
+Y→ eY is a group homomorphism. Then, C1 +C 2 := (ϕX ,(ϕ Θ, ϕΞ), ϕY , ψY , ˜h) is a covariant obfuscation for for
+h:X×(Θ×Ξ)→Ywhereh(x,(θ, ξ)) :=f(x, θ) +g(x, ξ)such that ˜h(x,(θ, ξ)) := ˜f(x, θ) + ˜g(x, ξ).
+Furthermore, let eC1 and eC2 be the obfuscation errors of C1 and C2, if the distance function on Y satisfies translation
+invariance, i.e.,
+d(x, y) =d(x+z, y+z),
+thene C1+C2 ≤e C1 +e C2.
+5 AloePri
+In this section, we first present an overview of AloePri, then describe the covariant obfuscation design, as well as the
+analysis on accuracy and information leakage in detail.
+𝑊!"#!$PermKeyMat
+Offline Model ObfuscationInvPermInvKeyMat𝑊%&'(
+InvKey Mat
+InvKey Mat
+𝑊)*!+,
+𝑊-!,𝑊./0*!
+InvKeyMat 𝑊1*2
+Block & Head Perm, Rot, ScalingHead Perm, MaskHead Perm,InvMaskKeyMat
+𝑊$134PermScaling, PermInvScaling, InvPermKeyMat
+RoPE & Softmax
+SiLU
+Noise
+**
+** ⊙
+****** ****** **
+𝚽𝒂𝒕𝒕𝒏
+*InvKeyMatKeyMat=IInvMaskMask=I*InvPermPerm=I*InvScalingScaling=I* Noise
+Invertible transformations
+𝚽$$%𝚽&'(&)
+𝚽*&+)
+Secret Vocab Mapping
+Online Inference𝚽𝐞𝐦𝐛𝐞𝐝𝐖𝐞𝐦𝐛𝐞𝐝𝚽/224𝐖/224𝚽994𝐖994𝚽:!/$𝐖:!/$𝐿 transformer blocks
+Residue connectionResidue connection
+Auto-regressive generation
+Prompt: Summarize this document for me…Original Vocab
+Obfuscated token indicesObfuscated input & output texts
+Itemprivate…cryright…𝚽𝐗𝒙,𝜳𝐘𝒚
+⊗InvKey MatInvKey Mat𝑊=/2!
+𝑊*>
+Figure 2: Overview of AloePri. In the offline model obfuscation process, token-level permutation and linear
+transformations are employed to construct the obfuscations ϕembed, ϕhead, ϕattn, and ϕffn. In the online inference process,
+a secret vocabulary mapping associated with the permutation is used to construct the data obfuscation ϕX and de-
+obfuscationψ Y .
+5.1 Overview
+As shown in Figure 2, based on the covariant obfuscation mechanism, AloePri includes both data obfuscation ϕX and
+model obfuscation ϕΘ mechanisms for an LLM inference function f:Z l
+n ×Θ→Z n. In an offline model obfuscation
+process, the client generates a secret permutation τ, which is used in ϕX =τ(x), ϕ Y (y) =τ(y) to permute input
+and output token indices x, y. The permutation τ is also used to shuffle the embedding and model head at the token
+level. To prevent the attacker from recovering τ by comparing plaintext and obfuscated weights of the embedding
+and model head, a series of sub-obfuscations, including ϕembed, ϕhead, ϕattn, and ϕffn, are applied to all model weights.
+These sub-obfuscations also protect the internal states generated during model inference. Based on the composition
+7
+
+===== PAGE 8 =====
+Running Title for Header
+theorems in Section 4.2, we combine all the sub-obfuscations intoϕΘ, which together with ϕX , ϕY to form the covariant
+obfuscation of f for the entire model inference process. During the online inference process, the client locally obfuscates
+its text data at the token level based on τ before sending them to the server. According to the definition of covariant
+obfuscation, AloePri can preserve model accuracy when performing inference on obfuscated data using obfuscated
+model weights.
+Remark. AloePri leverages lightweight token-level permutations to protect tokens, and uses invertible transformations
+and noise injection to conceal the permutation itself. Following previous studies [ 45, 46] on practical privacy-
+enhancement technologies, AloePri aims to provide adjustable security for constrained attackers in real-world
+scenarios, rather than offering ideal-world security guarantees against worst-case attackers. We formalize the upper
+bound of the attack success rate against AloePri using the PAC privacy framework in Section 5.5, and empirically
+validate the privacy guarantee against constrained attackers via a series of experiments in Section 6.
+5.2 Offline Model Obfuscation
+In offline model obfuscation, token-level permutation is applied to weights of the embedding layer and model head,
+which enables the client to obfuscate texts at the token level and supports auto-regressive text generation tasks.
+Meanwhile, by introducingtwo-side(left-multiplication and right-multiplication) transformations for weight matrices,
+the token-level permutation is kept secret from the server. We first present an algorithm to generate (inverse) key matrix
+used to construct obfuscations. Then we present concrete construction of ϕembed, ϕhead, ϕattn, ϕffn for popular LLM
+structures.
+5.2.1 Key Matrix Generation
+During LLM inference, input data is processed layer-by-layer between adjacent layers with residual connections.
+AloePri utilizes a set of key matrices and their inverses to perform two-side transformations on the weights of adjacent
+layers. Therefore, without knowledge of the key matrices (or their inverses), the attacker cannot recover the secret
+token-level permutation imposed on the embedding layer and model head. Meanwhile, each key matrix can be canceled
+out by any of its inverses, ensuring the correctness of forward computation.
+Algorithm 1 shows the generation of key matrices and their inverses. The algorithm takes the hidden size d of the
+model, expansion size h, and matrix coefficient λ as inputs to initialize a set of base matrices. Then, KeyMatGen and
+InvKeyMatGenleverage the base matrices to generate random key matrices{ ˆP}and inverse key matrices{ ˆQ}. With
+the expanded dimension controlled by h, we can generate an infinite number of matrices ˆP and ˆQ that satisfy ˆP· ˆQ=I
+using KeyMatGen and InvKeyMatGen. Key and inverse key matrices are used to obfuscate model weights, including
+the embedding, attention, FFN, and model head layers. Since most LLMs store model weights in half-precision, an
+extra parameter λ is employed to regulate the matrix norm, avoiding significantly altering the magnitude of obfuscated
+weights.
+Algorithm 1Key Matrix Generation
+Parameters:hidden sized, expansion sizeh, coefficientλ.
+1:functionINIT(d, h, λ)
+2: Uniformly sampleUfrom orthogonal groupO d.
+3: SampleV∼ N(0, 1
+d )d×d, setB=U+λV, computeB −1.
+4: SampleE 1 ∼ N(0, 1
+d )d×h/2,E 2 ∼ N(0, 1
+d )h/2×h, setE=E 1E2.
+5: SampleF 1 ∼ N(0, 1
+d )h×h/2,F 2 ∼ N(0, 1
+d )h/2×d, setF=F 1F2.
+6: Sample a orthogonal matrixZ∈O d+2h uniformly.
+7:return(B, B −1, E, F, Z).
+8:end function
+9:functionKEYMATGEN(B, E, F, Z)
+10: ConstructC∈R d×h with columns sampled fromnull(F T ).
+11:return ˆP= [B C E]Z.
+12:end function
+13:functionINVKEYMATGEN(B −1, E, F, Z)
+14: ConstructD∈R h×d with rows sampled fromnull(E).
+15:return ˆQ=Z T [B −1 F D] T .
+16:end function
+8
+
+===== PAGE 9 =====
+Running Title for Header
+5.2.2 Embedding and Model Head Obfuscation
+Since the embedding layer and model head are directly associated with the input and output of the model, we also need
+to take into account the design of the data obfuscation ϕX when constructing ϕembed and ϕhead. AloePri encompasses
+three techniques to constructϕ embed andϕ head: noise addition, permutation, and (inverse) key matrix transformations.
+Noise Addition. The client samples noise matrices Eembed ∼ N(0, σ 2
+e In ⊗I d) and Ehead ∼ N(0, σ 2
+hId ⊗I n), where
+σe, σh are the standard variation of Wembed, Whead. The noisy weights of embedding and model head can be expressed
+asW ⋆
+embed =W embed +α e · Eembed andW ⋆
+head =W head +α h · Ehead, whereα e andα h are noise parameters.
+Permutation and Key Matrix Transformation. The client further employs token-level permutation to construct
+ϕembed, ϕhead. This permutation keeps the support of auto-regressive generation. Meanwhile, the permutation also
+correlates to the construction of ϕX and ϕY so that the attacker cannot recover private input and output data without
+knowing the permutation. Specifically, the client samples a permutation τ∼S n. Let Π be the permutation matrix
+corresponding to τ. This permutation matrix is applied to W ⋆
+embed, W ⋆
+head. Simultaneously, a key matrix ˆPembed and a
+inverse key matrix ˆQhead are generated with Algorithm 1 and used to obfuscate W ⋆
+embed, W ⋆
+head. Finally, the obfuscation
+of embedding and model head are formalized as: fWembed = ΠW ⋆
+embed ˆPembed,fWhead = ˆQheadW ⋆
+headΠT . Besides the
+obfuscation of embedding and model head, the client uses the permutation τ to generate a secret token mapping
+Z={V[i] :V[τ[i]]}, which is used to obfuscate data during online inference.
+5.2.3 Attention Obfuscation
+As described in Eq. 2, an attention layer processes data using each attention head independently, and then aggregates the
+outputs across all heads. Therefore, we obfuscate the attention weights with the following two types of transformation.
+Intra-head Transformation.We use Algorithm 2 to obfuscate the weights of a group of attention heads
+(W (i)
+q , W η(i)
+k , W η(i)
+v , W(i)
+o ). Key matrices ˆQq, ˆQk, ˆQv, ˆPo (sampled via Algorithm 1) are applied to transform the
+weights. Random invertible matrices ˆUvo are used for value/output weights to preserve computation correctness.
+Considering RoPE, 2-dimensional rotary matrices ˆRqk and scaling matrices ˆHqk are introduced to transform query/key
+weights. Besides, we find that simultaneously shuffling the RoPE’s 2×2 blocks of query/key weights within a limited
+window exerts minimal impact on model accuracy, particularly for blocks with larger indices. Therefore, we perform
+block-wise permutation within a dynamic window to boost the obfuscation level.
+Inter-head Permutation.The attention weights are further obfuscated via attention head permutation, where we
+sample two random permutations: τkv ∼S mkv and τgroup ∼S m/mkv. τkv shuffles key and value weights at the individual
+attention head level, query and output weights at the grouped-head level. Meanwhile, τgroup shuffle query and output
+weights within each group, which disrupts inter-head correlations while preserving the model’s aggregation capability.
+The above obfuscation method can be directly applied to MHA, MQA, and GQA. As for MLA, low-rank matrices are
+employed for query and key weights, with the integration of decoupled RoPE. Therefore, we obfuscate the low-rank
+weights in MLA using another set of invertible transformations.
+5.2.4 FFN Obfuscation
+To ensure the correctness of non-linear operations in FFN, we mainly used scaling and permutation transformation
+to obfuscate ωffn ={W gate, Wup, Wdown}. Specifically, the obfuscated FFN weights are computed by: fWgate =
+ˆQgateWgate ˆZffn,fWup = ˆQupWup ˆHffn ˆZffn,fWdown = ˆZ −1
+ffn ˆH −1
+ffn Wdown ˆPdown, where ˆZffn is a permutation matrix uniformly
+sampled fromS dffn, and ˆHffn is a randomly sampled scaling matrix.
+For MoE models, an additional router weight Wrouter is incorporated to select experts. To obfuscate Wrouter, we first
+normalize the weight vector corresponding to every expert to get W ′
+router. Meanwhile, we sample a mexp ×m exp-
+dimensional permutation matrix ˆZrouter to generate fWrouter = ˆQrouterW ′
+router ˆZrouter. The order of experts is shuffled
+according to ˆZrouter, ensuring that the experts can be selected correctly.
+5.2.5 Layer Normalization Transformation
+Let Wnorm =Diag(w norm) denote the diagonal matrix corresponding to the RMSNorm weights. Assuming that the
+input data x of any normalization layer follows a Gaussian distribution, we use κ=E[ ||x ˆP||
+||x|| ] as the coefficient for the
+obfuscated normalization layer to adjust for the bias induced by the ˆP transformation. We then fuse an RMSNorm
+layer with weights ewnorm =1·κ and a linear layer with weights Wnorm to replace the plaintext RMSNorm layer. The
+9
+
+===== PAGE 10 =====
+Running Title for Header
+Algorithm 2Intra-head attention obfuscation
+Input:Attention weights (W (i)
+q , W η(i)
+k , W η(i)
+v , W (i)
+o ), maximum window size β, window sampling parameter γ, RoPE
+parameterζ, and block numberm blocks.
+Output:Obfuscated weights( fW (i)
+q ,fW η(i)
+k ,fW η(i)
+v ,fW (i)
+o ).
+1: Uniformly sampleρ i from(0,2π]and generate rotary matrix ˆRqk =Diag({R i}i≤ dhead
+2
+), whereR i =
+
+cosρ i −sinρ i
+sinρ i cosρ i
+
+.
+2: Samples i ∈Rand define ˆHqk = Diag({s 1I2, . . . , sdhead/2I2}).
+3: Sample ˆZblock ←BlockP erm(β, γ, ζ, m blocks).
+4: Sample ˆUvo ∼ N(0, 1
+dhead
+Idhead ⊗I dhead ).
+5: Sample ˆQq, ˆQk, ˆQv, ˆPo by Algorithm 1.
+6: Set fW η(i)
+k = ˆQkW η(i)
+k ˆRqk ˆH −1
+qk ˆZ T
+block,fW η(i)
+v = ˆQvW η(i)
+v ˆUvo.
+7: Set fW (i)
+q = ˆQqW (i)
+q ˆRqk ˆHqk ˆZblock,fW (i)
+o = ˆU −1
+vo W (i)
+o ˆPo.
+8:return( fW (i)
+q ,fW η(i)
+k ,fW η(i)
+v ,fW (i)
+o )
+9:functionBLOCKPERM(β, γ, ζ, m blocks)
+10: Initialize a listU={}and set block indext= 1.
+11: Compute{ζ i =ζ −2(i−1)/mblocks |1≤i≤m blocks}.
+12:whilet < m blocks do
+13: Setc= min(β, m blocks −t).
+14: Compute:u=sof tmax({ζ t+i −ζ t|1≤i≤c}).
+15: Sample window sizewfrom[1, c]with probabilitiesu.
+16: Uniformly sample a permutation matrixZ∈S w and append it toU.
+17:end while
+18: Concatenate the matrices into a block diagonal form: ˆZblock =BlockDiag(U).
+19: Return ˆZblock.
+20:end function
+weights of the linear layer Wnorm can be merged into the layer adjacent to the RMSNorm layer before applying weight
+obfuscation.
+5.3 Online Inference
+In the online inference phase, the client leverages the secret token mapping Z to obfuscate input prompts. Specifically,
+the client first tokenizes a prompt locally into l tokens T={tok 1,· · ·, tok l}, then encodes each token toki into its
+obfuscated counterpart ftoki =Z[tok i]. Once all obfuscated tokens are generated, the client detokenizes them to
+construct an obfuscated prompt eT and sends it to the server. The server tokenizes eT to produce obfuscated token
+indices {exi}i≤l as the input of the obfuscated model. The model then outputs an obfuscated response to the client.
+Finally, the client utilizesZto decode the obfuscated response back to plaintext.
+5.4 Accuracy Analysis
+We first analyze the obfuscation-induced bias of each LLM component individually, then leverage the composition
+theorems for covariant obfuscation to show that the inference accuracy of LLMs can be preserved. We adopt the symbol
+≈eC to denote the approximation relation with the obfuscation errore C as a constant upper bound.
+Embedding and Model Head.Let x denote an input token index, and fembed,efembed the embedding functions
+in the plaintext and obfuscated spaces, respectively. The covariant obfuscation of the embedding layer is formal-
+ized as: ϕembed
+X (x) =τ(x), ϕ embed
+Θ (Wembed) = ΠW ⋆
+embed ˆPembed, ϕembed
+Y (y) =y ˆPembed, ψembed
+Y (ey) =eyˆQ. Accordingly,
+efembed(ϕembed
+X (x), ϕembed
+Θ (Wembed))≈ eembed
+C
+ϕembed
+Y ◦f embed(x, Wembed), where eembed
+C is the obfuscation error of this co-
+variant obfuscation. Similarly, we deriveefhead(ϕhead
+X (x), ϕhead
+Θ (Whead))≈ ehead
+C
+ϕhead
+Y ◦f head(x, Whead), with ehead
+C as the
+corresponding obfuscation error.
+Attention.We denote ϕattn
+X (x) =x ˆP as the obfuscated input to the attention layer eωattn. The attention score for
+the i-th head is computed as: G(exfW (i)
+q )G(exfW η(i)
+k )T ≈eattn
+C
+G(xW (i′)
+q )G(xW η(i′)
+k )T , where i′ denotes the permuted
+index corresponding to the i-th head, and eattn
+C is the obfuscation error induced by block permutation (parameterized
+by β, γ). Meanwhile, the attention value satisfies: exfW η(i)
+v fW (i)
+o =xW η(i′)
+v W (i′)
+o ˆPo. Thus, by integrating attention
+10
+
+===== PAGE 11 =====
+Running Title for Header
+scores and values, we construct the covariant obfuscation as follows: ϕattn
+X (x) =x ˆP , ϕattn
+Θ (ωattn) =eωattn, ϕattn
+Y (y) =
+y ˆPo, ψattn
+Y (ey) =eyˆQ, with efattn denoting the attention function over obfuscated spaces. This obfuscation satisfies:
+efattn(ϕattn
+X (x), ϕattn
+Θ (ωattn))≈ eattn
+C
+ϕattn
+Y ◦f attn(x, ωattn),wheref attn(x, ωattn) ˆPo =ϕ attn
+Y ◦f attn(x, ωattn).
+FFN.Taking an ex=x ˆP as input, the forward computation of the obfuscated FFN layer holds that: efffn(ex,eωffn) =
+(SiLU(xWgate)⊙(xW up))W down ˆPdown =f ffn(x, ωffn) ˆPdown =ϕ ffn
+Y ◦f ffn(x, ωffn), where ϕffn
+Y (y) =y ˆPdown and efffn is
+the FFN function defined over the obfuscated spaces.
+Layer Normalization.Let Wnorm =Diag(w norm), we construct the covariant obfuscation as: ϕnorm
+X (x) =x ˆP ,
+ϕnorm
+Θ (wnorm) =ewnorm, ϕnorm
+Y (y) =yW −1
+norm ˆP , ψnorm
+Y (ey) =eyˆQWnorm, and efRMSNorm denotes the RMSNorm function
+defined over the obfuscated spaces. We have efRMSNorm(ex,ewnorm) = x ˆPq
+1
+d+2h
+Pd+2h
+i ex2
+i
+κI≈ enorm
+C
+x ˆP√
+1
+d
+Pd
+i x2
+i
+=ϕ norm
+Y ◦
+fRMSNorm(x, wnorm), wheree norm
+C is the obfuscation error of the covariant obfuscation.
+Putting Together.The above components are sequentially connected with residue connections in typical LLM
+structures, and the error of each component is relatively small. Since the components satisfy the bound conditions of
+Theorem 2 and Theorem 4, we can integrate these components to construct the covariant obfuscation as:ϕX(x) =τ(x) ,
+ϕΘ(θ) = (fWembed,fWhead,{eωattn,eωffn,ewnorm}), ϕY (y) =τ(y) , ψY (ey) =τ−1(ey), and ef is the LLM inference function
+for obfuscated spaces. It holds that efΘ(ϕX(x), ϕΘ(θ))≈ eAloePri
+C
+ϕY ◦f Θ(x, θ), where eAloePri
+C is the obfuscation error
+ofAloePri.
+As eAloePri
+C is related to the structure of LLM, we take a typical dense model structure like Qwen2 [47] as an example.
+The obfuscation error ofi-th decoder layer can be derived as
+edecoder
+Ci ≤(M norm
+i (M attn
+i enorm
+Ci +e attn
+Ci ) +e norm
+Ci )M norm
+i M FFN
+i ,
+where M norm, Mattn
+i , MFFN
+i are the Lipschitz constants of i-th RMSNorm, attention, FFN layers with consideration
+of residue connection. Let M head and M decoder
+i denote the Lipschitz constants of model head and i-th decoder layer,
+respectively. It holds thate AloePri
+C ≤ M0eembed
+C +PL
+i=1 Miedecoder
+Ci +e head
+C , whereM i =M headQL
+j=i+1 M decoder
+i .
+5.5 Security Analysis
+In AloePri, private tokens are safeguarded by the secret permutation τ. Accordingly, we formalize the security
+guarantees of AloePri by quantifying the attack success rate of recovering the elements of τ from the attacker’s
+observations. Our analytical framework proceeds as follows: we first measure the information leakage by calculating
+the mutual information between the secret permutation and the adversary’s observations. After that, by leveraging the
+PAC Privacy framework [22], we derive an upper bound on the attack success rate.
+Information Leakage.For the input token space X=Z l
+n, the linear space of model weights Θ, and the output token
+space Y=Z n, we denote Sn as the token transformation group, which left-acts on Θ. We define H as the parameter
+transformation group, which right-acts on Θ. The covariant obfuscation mechanism of AloePri is formulated as
+follows:
+ϕX(x) :=τ x, ϕ Θ(θ) :=τ(θ+ϵ)h, ϕ Y (y) :=τ y,
+ψY (y) :=τ −1y, ˜f=f,
+where τ∈S n is a token permutation sampled from the uniform distribution, ϵ is a zero-mean Gaussian noise term, and
+his the parameter transformation applied to model weights.
+Theorem 5 formalizes the upper bound on the mutual information between the secret permutation τ and an attacker’s
+observations—obfuscated data τ x and obfuscated model weights τ(θ+ϵ)h . Specifically, the mutual information
+I(τ;τ x, τ(θ+ϵ)h) is upper bounded by the sum of static information leakageI(τ;τ(θ+ϵ)h) (arising from obfuscated
+model weights observed in offline obfuscation) and dynamic information leakage I(τ;τ x) (arising from obfuscated
+data observed in online inference).
+Theorem 5(Information Leakage Bound).Let Sn be the token transformation group with τ∈S n acting on data x,
+and H be a finite subgroup of the model weight transformation group withh∈H acting on model weights θ, where the
+action of H is faithful. Denote τ ∗ and h∗ as the adjoints of the linear transformations τ:R n →R n and h:R n →R n,
+respectively. We have
+I(τ;τ x, τ(θ+ϵ)h)≤I(τ;τ(θ+ϵ)h) +I(τ;τ x),
+11
+
+===== PAGE 12 =====
+Running Title for Header
+and
+I(τ;τ(θ+ϵ)h)≤ 1
+2
+
+log det Σ−1 ¯Σ + (θ− ¯θ)tΣ−1(θ− ¯θ)
+
+−KL(δ∥δ 0),
+where ¯θ=E τ,h[τ θh] = 1
+|G||H|
+P
+τ∈G,h∈H τ θh, ¯Σ =E τ,h[(τ⊗h)Σ(τ ∗ ⊗h ∗)], δ0 = 1
+|H| , δ=
+max
+
+2Φ( 1
+2 minh̸=e∈H ∥θ−θh∥ Σ)−1, δ 0
+	
+.
+Proof.The proof follows Theorem 9 (Appendix C) and Theorem 12 (Appendix E).
+Bound of Attack Success Rate.Similar to the proof sketch of Theorem 1 in PAC privacy [ 22], we derive an upper
+bound on the success rate of static attacks (denoted ps) in Theorem 6, which attempt to recover elements of secret
+token permutation from observed obfuscated model weights. For the dynamic case where the attacker can additionally
+leverage information from obfuscated data during online inference, since the associated information leakage is also tied
+to the data distribution, we perform empirical evaluations in Section 6.6 to quantify its impact.
+Theorem 6(Static Attack Bound).The success rate ps of static attacks against AloePri satisfies KL(p s ∥p 0)≤
+n−1
+2n log detM, wherep 0 = 1
+n (the random guessing success rate), andMis defined as
+M=I 2d + 1
+n−1
+
+σ−1
+e W T
+embed
+σ−1
+h Whead
+
+In − 1
+n Jn
+ σ−1
+e Wembed
+σ−1
+h W T
+head
+T
+,(3)
+where σe, σh are the standard deviations of the noise added to Wembed and Whead, respectively. Jn is the n×n all-ones
+matrix.
+Proof.The proof follows Remark 1 (Appendix C) and Theorem 10 (Appendix E).
+6 Experiments
+In this section, we present the experimental results ofAloePriand their explanation.
+6.1 Experimental Settings
+Models and Datasets.We conduct experiments on commonly-used open-source LLMs to evaluate the effectiveness of
+AloePri. For dense models, we select Qwen2.5/Qwen3 [47, 48], Llama3 [49], Deepseek-R1-Distill-Qwen (R1-Distill)
+[43]. For MoE models, we choose Qwen3-MoE and Deepseek-V3.1-Terminus [ 50], covering both moderate and
+large-scale models.
+We employ various representative LLM evaluation benchmarks to evaluate model accuracy, including SST2 [51] for
+sentence classification, MMLU [52] and C-Eval [53] for general tasks, HumanEval [54] for code generation, IFEval
+[55] for alignment, and PIQA [56] for physical commonsense reasoning. Additionally, we use PUPA dataset [14] to
+validate the protection level for Personally Identifiable Information (PII). We use CCI3 [57], Huatuo26M-Lite [58], and
+MedDialog [59] datasets to evaluate information leakage related to token frequency patterns.
+Baseline Methods.According to the discussion in Section 2, we compare AloePri with four obfuscation-based
+privacy-preserving inference methods, which are the most related to our work. SANTEXT [23] and RANTEXT [11] are
+based on token substitution, while DP-Forward [16] and SGT [17] are based on embedding transformation. Because
+cryptography-based methods are still far from practical usage and TEE-based methods lack hardware compatibility, we
+do not compareAloePriwith them.
+Attacks.We evaluate the resistance of AloePri against three types of typical attacks. (1) Obfuscation recovery: We
+adopt V ocabulary-Matching Attack (VMA) [25] and Invariant Attack (IA) [ 34] to verify whether the attacker can
+recover the secret mapping of AloePri based on the relationship between plaintext and obfuscated mode weights.
+(2) Training-based inversion: We use Internal State Attack (ISA) [ 24], Inversion Model Attack (IMA) [ 26], and
+nearest neighbor (NN) attack to investigate the protection of internal states. (3) Token frequency exploit: We use
+Token Frequency Matching Attack (TFMA) and Substitution Deciphering Attack (SDA) [27] to test the information
+leakage of token frequency. To the best of our knowledge, these attacks encompass almost all privacy threats faced by
+obfuscation-based privacy-preserving inference methods. We provide detailed information about the above attacks in
+Appendix F.1.
+12
+
+===== PAGE 13 =====
+Running Title for Header
+Privacy Metrics.We adopt several metrics to quantify the privacy level. TheText Token Recovery Success Ratio
+(TTRSR)measures the proportion of original tokens successfully recovered by the attacker, providing a direct measure
+of token-level privacy protection. ThePII Recovery Success Ratio (PIIRSR)quantifies the percentage of personally
+identifiable information (e.g., names, addresses, phone numbers) correctly extracted from the obfuscated outputs. The
+Recovered Text Cosine Similarity (CosSim)calculates the cosine similarity between the embedding of the recovered text
+and the original plaintext.Top-kaccuracy assesses the accuracy of token matching based on the k-nearest neighbors.
+TheBLEU-4score measures the n-gram overlap between the adversary’s recovered text and the original plaintext.
+Hyperparameter Configuration.In accordance with the recommended configurations of these models, we fix the
+generation parameters across all experiments with temperature = 0.65, top-k = 20, and top-p = 0.95. As for the privacy
+parameters, we tune them in subsequent experiments. If not specified, we set the matrix coefficient to λ= 0.3 , the
+expansion size to h= 128 , the noise coefficients to αe = 1.0 and αh = 0.2, and the attention block-wise parameters to
+β= 8 and γ= 1e 3 by default. We present detailed hyperparameter settings of subsequent experiments in Appendix
+F.2.
+Table 1: Accuracy and privacy comparison with baselines on Qwen2.5-14B-Instruct.
+Method Classification Acc.↑ Generation Acc.↑ Privacy1
+MI↓SST2 MMLU PIQA IFEval Attack TTRSR(%)
+↓
+CosSim↓
+Plaintext 97.25 81.95 77.45 77.09 - - - -
+SANTEXT 81.31 51.07 49.72 57.45 (Direct
+obs.)
+62.90 0.93 2.81
+RANTEXT 87.50 37.77 18.30 57.18 (Direct
+obs.)
+56.92 0.88 2.70
+DP-Forward2 93.60 - - - NN 37.82 0.51 >11.93 (= logn)IMA 77.08 0.84
+SGT3 92.43 30.30 26.06 34.66 NN 11.12 0.69 1.11IMA 98.58 0.99
+AloePri 97.13 80.61 75.23 79.49
+VMA 13.51 0.31
+0.08
+NN 0.0 0.42
+IMA 0.0 0.36
+IA 5.95 0.40
+ISA 0.0 0.20
+1 Only count the privacy of the input text, as the baselines do not protect generated texts.
+2 DP-Forwardcannot support for auto-regressive generation tasks.
+3 SGTdoes not release source codes. Therefore, we re-implementSGTaccording to the description in their paper [17].
+Experimental Environment.The client-side environment is configured with a CPU-only setup equipped with two
+Intel(R) Xeon(R) Platinum 8457C processors (96 cores). The server-side environment employs a high-performance
+GPU cluster to handle the computational demands of large language model inference. We deploy the server-side
+inference service with vLLM 0.9.1 [29] and CUDA 12.4.
+6.2 Comparison with Previous Methods
+We compared AloePri with data obfuscation methods on model accuracy and privacy. The model accuracy is evaluated
+on MMLU, IFEval, and PIQA. We conducted various attacks (e.g. NN, IMA, VMA, IA, and ISA) to test privacy levels
+of different methods. We present the details and hyperparameter settings of baselines in Appendix F.3.
+As shown in Table 1, AloePri significantly outperforms baselines in both model accuracy and data privacy. For
+SANTEXT and RANTEXT, we calculated the TTRSR by counting the number of plaintext tokens directly observed by
+the attacker. The two methods leak over 50% of tokens while still suffer significant accuracy degradation. The reason
+is that the sensitive tokens replacement directly disrupts the key semantic information needed for answer generation.
+DP-Forward reaches about 94% accuracy on SST2, but it is vulnerable to IMA with over 75% TTRSR. In SGT, the
+client leverages a 1.6B-parameter model for noise generation. However, SGT still causes over 50% accuracy loss.
+Meanwhile, SGT is also vulnerable to IMA, leading to over 90% TTRSR. Based on covariant obfuscation, AloePri
+achieves a better balance between model accuracy and privacy. AloePri shows strong resistance to VMA, IMA, IA,
+and ISA, i.e., TTRSR is less than 15%. Meanwhile, AloePri achieves less than 3% accuracy loss on both classification
+and generation tasks.
+Additionally, we used the Contrastive Log-ratio Upper Bound (CLUB) [60] estimator (details presented in Appendix
+F.4) to simulate the MI between pair-wise plaintext and obfuscated token, whose theoretical upper bound is log(n).
+13
+
+===== PAGE 14 =====
+Running Title for Header
+Through MI, we can theoretically compare the information leakage levels of different methods. Due to the advantage
+of covariant obfuscation, AloePri reaches the smallest information leakage. For DP-Forward, excessive information
+leakage and the limitations of CLUB result in the simulated MI exceeding the upper bound log(n). It is worth noting
+that MI is not always correlated with the success rate of specific attacks. This is because each specific attack has
+inherent limitations and may fail to capture the leaked information.
+0.50 0.75 1.00 1.25 1.50
+Embed noise coefficient αe
+70
+75
+80
+85
+90
+95
+100Accuracy (%)
+Plaintext Accuracy
+Accuracy
+TTRSR
+0
+10
+20
+30
+40
+TTRSR
+(a) Variousα e with fixedα h = 0.2
+0.1 0.2 0.3 0.4 0.5
+Head noise coefficient αh
+70
+75
+80
+85
+90
+95
+100Accuracy (%)
+Plaintext Accuracy
+Accuracy
+TTRSR
+0
+10
+20
+30
+40
+TTRSR (b) Variousα h with fixedα e = 1.0
+Figure 3: Privacy (TTRSR) and accuracy under various noise parameters on Qwen2.5-14B-Instruct and C-Eval.
+0.10.3 1.0 3.0
+Key matrix coefficient λ
+0
+20
+40
+60
+80Accuracy (%)
+Plaintext
+AloePri (BF16)
+AloePri (FP32)
+(a) Accuracy of C-Eval.
+λ = 0.1 λ = 0.3 λ = 1.0 λ = 3.0
+Key matrix coefficient λ
+20
+40
+60
+80
+100
+120
+140Norm of internal state
+ (b) Norm distribution of internal states.
+Figure 4: Impact ofλon Qwen2.5-14B-Instruct.
+Table 2: Accuracy and privacy of AloePri under various models and datasets. Privacy is evaluated with VMA on
+PUPA dataset.
+Model Plaintext accuracy↑AloePriaccuracy↑AloePriprivacy against VMA↓
+MMLU C-Eval HumanEval PIQA IFEval MMLU C-Eval HumanEval PIQA IFEval TTRSR(%) PIIRSR(%) BLEU-4
+R1-Distill 14B 78.91 86.18 96.34 88.14 72.83 79.2 85.93 93.9 88.79 72.27 12.36 2.37 0.52
+32B 83.5 88.34 97.56 88.79 73.94 83.61 87.84 95.12 88.08 73.57 10.10 2.63 0.78
+Qwen3 14B 87.64 87.35 94.51 89.72 86.14 84.57 87.12 95.12 90.26 85.40 25.05 1.62 1.72
+32B 89.61 89.0 98.78 90.75 84.29 86.24 87.64 96.95 89.5 81.15 19.64 1.23 1.41
+Llama3 8B 65.91 50.16 55.49 80.74 68.58 63.5 44.55 57.32 78.94 67.84 2.57 0 0.84
+Qwen3-MoE-Instruct 30B-A3B 84.75 86.97 85.37 89.55 80.41 84.49 86.79 83.54 82.21 78.56 5.91 2.43 0.74
+DS-V3.1-Terminus (no_think) 671B 91.72 87.67 94.51 83.84 86.69 90.67 85.65 95.12 80.96 84.66 4.80 1.12 0.40
+6.3 Impact of Privacy Parameters
+We then evaluated the accuracy (measured by C-Eval) and privacy (against the VMA attack) ofAloePri under different
+noise parameter settings. As depicted in Figure 3, αe and αh both play a critical role in preserving data privacy. For
+instance, the VMA attack can recover over 30% tokens when αe is set to 0.5. The reason is that when the noise added
+to the weights of the embedding or model head is small, each pair of plain and obfuscated weights in Table 8 differs
+almost only by row-wise and column-wise permutations. Consequently, VMA can easily recover the secret permutation
+Π through the approach of sorting followed by matching. Considering the trade-off between accuracy and privacy, we
+recommend settingα e = 1.0andα h = 0.2for practical applications.
+In Figure 4a, we evaluate the impact of λ on model accuracy for both bfloat16 (BF16) and float32 (FP32) precisions.
+The results demonstrate that model accuracy degrades drastically at λ= 3.0 under the BF16 precision setting. Further
+14
+
+===== PAGE 15 =====
+Running Title for Header
+observations of the norm distribution of internal states reported in Figure 4b reveal that this phenomenon arises because
+increasing λ to enhance the obfuscation level of the key matrix simultaneously enlarges the distribution range of internal
+states, which makes numerical overflow more likely to occur during BF16-precision computations.
+6.4 Accuracy and Privacy under Various Models and Datasets
+To demonstrate the generality of AloePri, we tested the accuracy of AloePri on more models and datasets. We tested
+five commonly used datasets in the LLM benchmark (MMLU, C-Eval, HumanEval, PIQA, IFEval). For privacy, we
+used PUPA dataset, which is widely used to evaluate privacy levels of previous studies [14].
+As shown in Table 2, AloePri can strongly protect input data while preserving model accuracy well for various models
+and tasks. Concretely, the accuracy loss of AloePri compared with plaintext model inference is less than 3% in most
+datasets. Meanwhile, AloePri can effectively defend against VMA, i.e., PIIRSR of VMA on AloePri are less than
+3% for all models. These results further validate the generality ofAloePrion models with various architectures.
+Table 3: Ablative studies for internal state protection
+against ISA
+Applied mechanism TTRSR(%)↓
+AttnScore HiddenState
+Noise 87.14 40.0
+Noise + KeyMat 87.14 0.82
+Noise + KeyMat + Head&BlockPerm0.0 0.0
+Table 4: Attack success rate of TFMA and SDA.
+Attack setting TFMA(%)↓ SDA↓
+Pub. data Priv. data Top-10 Top-100 BLEU-4
+CCI3 Huatuo26M 0.14 1.01 0.01
+MedDialog Huatuo26M 0.43 3.83 0.55
+Huatuo26M Huatuo26M 3.19 16.51 2.10
+6.5 Ablative Analysis of Internal States Protection
+We conducted ablative experiments to test the protective effect of AloePri on internal states (attention scores
+AttnScore and decoder-layer hidden states HiddenState ) against ISA. The obfuscation techniques tested include
+embedding noise N oise, key matrices KeyM at, attention block, and head permutation Head&BlockP erm . As
+shown in Table 3, by combining embedding noise, key matrices, and attention block and head permutation,AloePri
+provides strong protection for internal states. Concretely, merely adding embedding noise is insufficient to prevent
+attackers from recovering tokens via internal states. After applying obfuscation of key matrices, the attacker can hardly
+exploit the hidden states output by decoder layers to perform ISA. However, attention scores remain vulnerable to ISA,
+as the attention scores generated by attention queries and keys are not obfuscated by the key matrices. Consequently, in
+AloePri, permutations of attention heads and blocks are introduced to further protect attention scores.
+6.6 Information Leakage of Token Frequency
+We evaluated attackers’ ability to reconstruct private texts from token frequency via TFMA and SDA, defining three
+attack settings based on their prior knowledge of the client’s private data:Zero-knowledge(no client data information),
+where attackers leverage the public corpus CCI3 to recover the client’s medical domain dataset Huatuo26M-Lite;
+Domain-aware(access to client data domain information), where attackers use the medical domain dataset MedDiag to
+recover Huatuo26M-Lite;Distribution-aware(knowledge of the client data’s specific distribution), where attackers
+utilize Huatuo26M-Lite to recover a user dataset constructed from a different subset of the same dataset.
+As shown in Table 4, in all three settings,AloePri can effectively prevent the attacker obtain private data through token
+frequency. Concretely, even when the attacker has prior knowledge of the user data distribution, it remains challenging
+to recover the client dataset by exploiting token frequency information. For instance, when using TFMA to directly
+perform matching based on token frequencies, the attacker’s Top-100 token recovery success rate is still no higher than
+20%. When employing the transformer-based SDA, the BLEU-4 score for the recovered text quality is only around 2,
+which is insufficient to form meaningful text.
+Table 5: Runtime of Offline Model Obfusca-
+tion.
+Model Time cost (min)
+R1-Distill-14B 3.43
+R1-Distill-32B 9.28
+Qwen3-MoE-30B-A3B 4.58
+Deepseek-V3.1-Terminus 482.38
+Table 6: Online Inference TTFT (ms) and TPOT (ms)
+Model Concurrency PlaintextAloePri
+TTFT TPOT TTFT TPOT
+R1-Distill-14B 1 19.49 6.93 20.56 6.72
+4 33.34 7.41 36.64 7.22
+Deepseek-V3.1-Terminus 1 166.08 19.14 172.04 19.63
+4 185.11 21.42 199.97 22.41
+15
+
+===== PAGE 16 =====
+Running Title for Header
+6.7 Efficiency ofAloePri
+As shown in Table 5, to evaluate the efficiency of AloePri, we test the runtime of offline model obfuscation and
+online inference on four models. Experimental results show that AloePri delivers practical efficiency for real-world
+deployment. For offline model obfuscation, it takes only about 10 minutes for a 32B dense model and about 8 hours
+for the 671B Deepseek-V3.1-Terminus. As this is an offline process, the runtime overhead is acceptable for practical
+use. For online inference, we compare AloePri with plaintext inference in text generation efficiency usingTime to
+First Token (TTFT)andTime Per Output Token (TPOT)metrics. We test R1-Distill-14B with tensor parallelism set to 4,
+average 17-token prompts, 100-token generated texts and varying client request concurrency levels. Results in Table 6
+show thatAloePriachieves identical online efficiency to plaintext inference.
+128 256 384 512
+Expansion size h
+7.2
+7.3
+7.4
+7.5
+7.6
+7.7TPOT (ms)
+(a) TPOT
+128 256 384 512
+Expansion size h
+20
+25
+30
+35
+40
+45
+50TTFT (ms) (b) TTFT
+Figure 5: TPOT and TTFT vs.hon R1-Distill-14B
+In Figure 5, we further investigate the impact of the expansion size on inference efficiency using R1-Distill-14B with
+request concurrency set to 4. Experimental results demonstrate that increasing the expansion size only slightly adds
+token latency, as modern LLM frameworks incorporate a variety of optimizations for parallel matrix computation. For
+example, the increase in TPOT is less than 10% even whenhis scaled up to 512.
+7 Discussion and Future Work
+Generalization to Other Models.We focus primarily on text-generative LLMs in this work, but our method’s design
+principles generalize to emerging Transformer variants and other neural network architectures (e.g., multi-modal LLMs,
+CNNs) under the covariant obfuscation mechanism. Most model architectures can be formulated as directed acyclic
+graphs (DAGs), with nodes (model components) connected sequentially or in parallel. Thus, the composition theorems
+of covariant obfuscation remain applicable for designing obfuscation schemes for these models, making carefully
+designed covariant obfuscation feasible for them.
+Protection of Model Weights. AloePri can be further extended to scenarios where only the server can access the
+model. In this case, CPU-TEE or FHE can be leveraged to allow the client to perform obfuscation without accessing the
+plaintext model. Taking FHE as an example: the server encrypts model weights via FHE and transmits them to the
+client, who obfuscates the encrypted weights and returns the results to the server. In this way, model obfuscation is
+achieved while keeping the model confidential from the client.
+8 Conclusion
+In this paper, we propose covariant obfuscation and design a privacy-preserving LLM inference methodAloePri for
+industrial applications. We theoretically demonstrate the superiority of covariant obfuscation over data obfuscation
+methods and propose three composition theorems for covariant obfuscation construction. Subsequently, by constructing
+covariant obfuscation for each model component and composing them based on composition theorems, AloePri
+can strongly protect user privacy in LLM inference while preserving model accuracy well. Through comprehensive
+evaluations, we show thatAloePri can maintain high model accuracy while effectively defending against representative
+attacks. For example, for Deepseek-V3.1-Terminus, with an accuracy loss smaller than 3.5% and similar efficiency
+to plaintext inference, attackers can only recover less than 5% of text tokens through inversion attacks. Our results
+demonstrate that utilizing internal structures of the model inference process based on covariant obfuscation could be a
+better way to design accurate, low-cost, and efficient privacy-preserving LLM inference methods.
+16
+
+===== PAGE 17 =====
+Running Title for Header
+References
+[1] Claude. Claude 3.5 sonnet, 2024.
+[2] Dan Hendrycks and et al. Measuring massive multitask language understanding. InICLR, 2021.
+[3] Percy Liang and et al. Holistic evaluation of language models.arXiv preprint arXiv:2211.09110, 2022.
+[4] Lianmin Zheng and et al. Judging llm-as-a-judge with mt-bench and chatbot arena.NeurIPS, 2023.
+[5] Robert B Miller. Response time in man-computer conversational transactions. InProceedings of fall joint
+computer conference, part I, pages 267–277, 1968.
+[6] Kanav Gupta, Neha Jawalkar, Ananta Mukherjee, Nishanth Chandran, Divya Gupta, Ashish Panwar, and Rahul
+Sharma. Sigma: Secure gpt inference with function secret sharing.Cryptology ePrint Archive, 2023.
+[7] Jiawen Zhang, Xinpeng Yang, Lipeng He, Kejia Chen, Wen-jie Lu, Yinghao Wang, Xiaoyang Hou, Jian Liu, Kui
+Ren, and Xiaohu Yang. Secure transformer inference made non-interactive.Cryptology ePrint Archive, 2024.
+[8] Yifan Tan, Cheng Tan, Zeyu Mi, and Haibo Chen. Pipellm: Fast and confidential large language model services
+with speculative pipelined encryption. InProceedings of the 30th ACM International Conference on Architectural
+Support for Programming Languages and Operating Systems, Volume 1, pages 843–857, 2025.
+[9] Lucien K.L. Ng, Sherman S.M. Chow, Anna P.Y . Woo, Donald P. H. Wong, and Yongjun Zhao. Goten: {GPU}-
+outsourcing trusted execution of neural network training and prediction, 2020.
+[10] Ziqi Zhang, Chen Gong, Yifeng Cai, Yuanyuan Yuan, Bingyan Liu, Ding Li, Yao Guo, and Xiangqun Chen. No
+privacy left outside: On the (in-) security of tee-shielded dnn partition for on-device ml. In2024 IEEE Symposium
+on Security and Privacy (SP), pages 3327–3345. IEEE, 2024.
+[11] Meng Tong, Kejiang Chen, Jie Zhang, Yuang Qi, Weiming Zhang, Nenghai Yu, Tianwei Zhang, and Zhikun Zhang.
+Inferdpt: Privacy-preserving inference for black-box large language models.IEEE Transactions on Dependable
+and Secure Computing, 2025.
+[12] Amrita Roy Chowdhury, David Glukhov, Divyam Anshumaan, Prasad Chalasani, Nicolas Papernot, Somesh Jha,
+and Mihir Bellare. Prϵϵmpt: Sanitizing sensitive prompts for llms.arXiv preprint arXiv:2504.05147, 2025.
+[13] Xinyu Tang, Richard Shin, Huseyin A Inan, Andre Manoel, Fatemehsadat Mireshghallah, Zinan Lin, Sivakanth
+Gopi, Janardhan Kulkarni, and Robert Sim. Privacy-preserving in-context learning with differentially private
+few-shot generation.arXiv preprint arXiv:2309.11765, 2023.
+[14] Siyan Li, Vethavikashini Chithrra Raghuram, Omar Khattab, Julia Hirschberg, and Zhou Yu. Papillon: Privacy
+preservation from internet-based and local language model ensembles. InNAACL, 2025.
+[15] Zhili Shen, Zihang Xi, Ying He, Wei Tong, Jingyu Hua, and Sheng Zhong. The fire thief is also the keeper:
+Balancing usability and privacy in prompts.arXiv preprint arXiv:2406.14318, 2024.
+[16] Minxin Du, Xiang Yue, Sherman SM Chow, Tianhao Wang, Chenyu Huang, and Huan Sun. Dp-forward: Fine-
+tuning and inference on language models with differential privacy in forward pass. InCCS, pages 2665–2679,
+2023.
+[17] Jay Roberts, Kyle Mylonakis, Sidhartha Roy, and Kaan Kale. Learning obfuscations of llm embedding sequences:
+Stained glass transform.arXiv preprint arXiv:2506.09452, 2025.
+[18] Mu Yuan, Lan Zhang, and Xiang-Yang Li. Secure transformer inference protocol.arXiv preprint arXiv:2312.00025,
+2023.
+[19] Khoa Nguyen, Khiem Ton, NhatHai Phan, Issa Khalil, Khang Tran, Cristian Borcea, Ruoming Jin, Abdallah
+Khreishah, and My T. Thai. Noir: Privacy-preserving generation of code with open-source llms, 2026.
+[20] Cynthia Dwork. Differential privacy. InInternational colloquium on automata, languages, and programming,
+pages 1–12. Springer, 2006.
+[21] Ilya Mironov. Rényi differential privacy. In2017 IEEE 30th computer security foundations symposium (CSF),
+pages 263–275. IEEE, 2017.
+[22] Hanshen Xiao and Srinivas Devadas. Pac privacy: Automatic privacy measurement and control of data processing.
+InAnnual International Cryptology Conference, pages 611–644. Springer, 2023.
+[23] Xiang Yue, Minxin Du, Tianhao Wang, Yaliang Li, Huan Sun, and Sherman SM Chow. Differential privacy for
+text analytics via natural text sanitization.arXiv preprint arXiv:2106.01221, 2021.
+[24] Tian Dong, Yan Meng, Shaofeng Li, Guoxing Chen, Zhen Liu, and Haojin Zhu. Depth gives a false sense of
+privacy:{LLM}internal states inversion. InUSENIX Security, pages 1629–1648, 2025.
+17
+
+===== PAGE 18 =====
+Running Title for Header
+[25] Rahul Krishna Thomas, Louai Zahran, Erica Choi, Akilesh Potti, Micah Goldblum, and Arka Pal. Hidden no
+more: Attacking and defending private third-party LLM inference. In Aarti Singh, Maryam Fazel, Daniel Hsu,
+Simon Lacoste-Julien, Felix Berkenkamp, Tegan Maharaj, Kiri Wagstaff, and Jerry Zhu, editors,ICML, volume
+267 ofProceedings of Machine Learning Research, pages 59434–59469. PMLR, 13–19 Jul 2025.
+[26] Kai Kugler, Simon Münker, Johannes Höhmann, and Achim Rettinger. Invbert: Reconstructing text from
+contextualized word embeddings by inverting the bert pipeline.arXiv preprint arXiv:2109.10104, 2021.
+[27] Nada Aldarrab and Jonathan May. Can sequence-to-sequence models crack substitution ciphers? InEMNLP,
+pages 7226–7235, 2021.
+[28] Nishant Kambhatla, Logan Born, and Anoop Sarkar. Decipherment as regression: Solving historical substitution
+ciphers by learning symbol recurrence relations. InEACL, pages 2136–2152, 2023.
+[29] Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph E. Gonzalez,
+Hao Zhang, and Ion Stoica. Efficient memory management for large language model serving with pagedattention.
+InOSDI, 2023.
+[30] Lianmin Zheng, Liangsheng Yin, Zhiqiang Xie, Chuyue Livia Sun, Jeff Huang, Cody Hao Yu, Shiyi Cao, Christos
+Kozyrakis, Ion Stoica, Joseph E Gonzalez, et al. Sglang: Efficient execution of structured language model
+programs.NeurIPS, 37:62557–62583, 2024.
+[31] Ziqian Zeng, Jianwei Wang, Junyao Yang, Zhengdong Lu, Haoran Li, Huiping Zhuang, and Cen Chen. Privacyre-
+store: Privacy-preserving inference in large language models via privacy removal and restoration. InProceedings
+of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages
+10821–10855, 2025.
+[32] Peihua Mai, Ran Yan, Zhe Huang, Youjia Yang, and Yan Pang. Split-and-denoise: Protect large language model
+inference with local differential privacy.arXiv preprint arXiv:2310.09130, 2023.
+[33] Sam Lin, Wenyue Hua, Zhenting Wang, Mingyu Jin, Lizhou Fan, and Yongfeng Zhang. Emojiprompt: Generative
+prompt obfuscation for privacy-preserving communication with cloud-based llms. InNAACL, pages 12342–12361,
+2025.
+[34] Yu Lin, Qizhi Zhang, Quanwei Cai, Jue Hong, Wu Ye, Huiqi Liu, and Bing Duan. An inversion attack against
+obfuscated embedding matrix in language model inference. InProceedings of the 2024 Conference on Empirical
+Methods in Natural Language Processing, pages 2100–2104, 2024.
+[35] Wen-jie Lu, Zhicong Huang, Zhen Gu, Jingyu Li, Jian Liu, Cheng Hong, Kui Ren, Tao Wei, and WenGuang Chen.
+Bumblebee: Secure two-party inference framework for large transformers.Cryptology ePrint Archive, 2023.
+[36] Dacheng Li, Rulin Shao, Hongyi Wang, Han Guo, Eric P Xing, and Hao Zhang. Mpcformer: fast, performant and
+private transformer inference with mpc.arXiv preprint arXiv:2211.01452, 2022.
+[37] Chenxu Wang, Danqing Tang, Changxu Ci, Junjie Huang, Yankai Xu, Fengwei Zhang, Jiannong Cao, Jie Song,
+Shoumeng Yan, Tao Wei, and Zhengyu He. ccai: A compatible and confidential system for ai computing. In
+MICRO, page 340–353, New York, NY , USA, 2025. Association for Computing Machinery.
+[38] Florian Tramer and Dan Boneh. Slalom: Fast, verifiable and private execution of neural networks in trusted
+hardware. InICLR, 2019.
+[39] Dmitry Lepikhin, HyoukJoong Lee, Yuanzhong Xu, Dehao Chen, Orhan Firat, Yanping Huang, Maxim Krikun,
+Noam Shazeer, and Zhifeng Chen. Gshard: Scaling giant models with conditional computation and automatic
+sharding.arXiv preprint arXiv:2006.16668, 2020.
+[40] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and
+Illia Polosukhin. Attention is all you need.Advances in neural information processing systems, 30, 2017.
+[41] Noam Shazeer. Fast transformer decoding: One write-head is all you need.arXiv preprint arXiv:1911.02150,
+2019.
+[42] Joshua Ainslie, James Lee-Thorp, Michiel De Jong, Yury Zemlyanskiy, Federico Lebrón, and Sumit Sang-
+hai. Gqa: Training generalized multi-query transformer models from multi-head checkpoints.arXiv preprint
+arXiv:2305.13245, 2023.
+[43] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi
+Wang, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning.arXiv
+preprint arXiv:2501.12948, 2025.
+[44] Jianlin Su, Murtadha Ahmed, Yu Lu, Shengfeng Pan, Wen Bo, and Yunfeng Liu. Roformer: Enhanced transformer
+with rotary position embedding.Neurocomputing, 568:127063, 2024.
+18
+
+===== PAGE 19 =====
+Running Title for Header
+[45] Wenliang Du and Zhijun Zhan. A practical approach to solve secure multi-party computation problems. In
+Proceedings of the 2002 workshop on New security paradigms, pages 127–135, 2002.
+[46] Milad Nasr, Shuang Songi, Abhradeep Thakurta, Nicolas Papernot, and Nicholas Carlin. Adversary instantiation:
+Lower bounds for differentially private machine learning. In2021 IEEE Symposium on security and privacy (SP),
+pages 866–882. IEEE, 2021.
+[47] Qwen Team. Qwen2.5: A party of foundation models, September 2024.
+[48] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen
+Huang, Chenxu Lv, et al. Qwen3 technical report.arXiv preprint arXiv:2505.09388, 2025.
+[49] Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix,
+Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language
+models.arXiv preprint arXiv:2302.13971, 2023.
+[50] Aixin Liu, Bei Feng, Bing Xue, Bingxuan Wang, Bochao Wu, Chengda Lu, Chenggang Zhao, Chengqi Deng,
+Chenyu Zhang, Chong Ruan, et al. Deepseek-v3 technical report.arXiv preprint arXiv:2412.19437, 2024.
+[51] Richard Socher, Alex Perelygin, Jean Wu, Jason Chuang, Christopher D Manning, Andrew Y Ng, and Christopher
+Potts. Recursive deep models for semantic compositionality over a sentiment treebank. InNeurIPS, pages
+1631–1642, 2013.
+[52] Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt.
+Measuring massive multitask language understanding.ICLR, 2021.
+[53] Yuzhen Huang, Yuzhuo Bai, Zhihao Zhu, Junlei Zhang, Jinghan Zhang, Tangjun Su, Junteng Liu, Chuancheng Lv,
+Yikai Zhang, Jiayi Lei, Yao Fu, Maosong Sun, and Junxian He. C-eval: A multi-level multi-discipline chinese
+evaluation suite for foundation models.arXiv preprint arXiv:2305.08322, 2023.
+[54] Mark Chen. Evaluating large language models trained on code.arXiv preprint arXiv:2107.03374, 2021.
+[55] Jeffrey Zhou, Tianjian Lu, Swaroop Mishra, Siddhartha Brahma, Sujoy Basu, Yi Luan, Denny Zhou, and Le Hou.
+Instruction-following evaluation for large language models.arXiv preprint arXiv:2311.07911, 2023.
+[56] Yonatan Bisk, Rowan Zellers, Ronan Le Bras, Jianfeng Gao, and Yejin Choi. Piqa: Reasoning about physical
+commonsense in natural language. InAAAI, 2020.
+[57] Liangdong Wang, Bo-Wen Zhang, Chengwei Wu, Hanyu Zhao, Xiaofeng Shi, Shuhao Gu, Jijie Li, Quanyue Ma,
+TengFei Pan, and Guang Liu. Cci3. 0-hq: a large-scale chinese dataset of high quality designed for pre-training
+large language models.arXiv preprint arXiv:2410.18505, 2024.
+[58] Xidong Wang, Jianquan Li, Shunian Chen, Yuxuan Zhu, Xiangbo Wu, Zhiyi Zhang, Xiaolong Xu, Junying Chen,
+Jie Fu, Xiang Wan, et al. Huatuo-26m, a large-scale chinese medical qa dataset. InFindings of the Association for
+Computational Linguistics: NAACL 2025, pages 3828–3848, 2025.
+[59] Shu Chen, Zeqian Ju, Xiangyu Dong, Hongchao Fang, Sicheng Wang, Yue Yang, Jiaqi Zeng, Ruisi Zhang, Ruoyu
+Zhang, Meng Zhou, Penghui Zhu, and Pengtao Xie. Meddialog: a large-scale medical dialogue dataset.arXiv
+preprint arXiv:2004.03329, 2020.
+[60] Pengyu Cheng, Weituo Hao, Shuyang Dai, Jiachang Liu, Zhe Gan, and Lawrence Carin. Club: A contrastive
+log-ratio upper bound of mutual information. InICML, pages 1779–1788. PMLR, 2020.
+[61] Thomas M. Cover.Elements of Information. Theory. John Wiley & Sons, Inc., 1991.
+[62] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, Weizhu Chen,
+et al. Lora: Low-rank adaptation of large language models.ICLR, 1(2):3, 2022.
+A Notation Table
+The notations used in the paper is concluded in Table 7.
+B Proof of Covariant Obfuscation
+B.1 Proof of Theorem 1
+Proof. Without loss of generality, we can let X=Z l
+n be the input token space, linear space Θ be the space of model
+weights, Y=Z n be the output token space. We denote Sn as the token transformation group, which left-acts on Θ. We
+19
+
+===== PAGE 20 =====
+Running Title for Header
+Table 7: Notations and their Descriptions
+Notation Description
+n Number of vocabulary’s tokens
+d, dhead, dffn Hidden size, attention head dimension, and FFN intermediate dimension
+h Expansion size for the key matrix
+d′ Expanded hidden size
+m, mkv Number of attention heads, and number of attention key-value heads
+mexp Number of MoE experts
+θ,V Weights and vocabulary of the language model
+L Number of decoder layers
+Wembed, Whead Weights of the embedding layer and model head layer
+wnorm Weights of the layer normalization
+ωattn Weights of an attention layer (includingWquery, Wkey, Wvalue, Wout)
+ωffn Weights of the FFN layer (includingWgate, Wup, Wdown)
+λ Coefficient for matrix sampling.
+αe, αh Noise parameters for the embedding layer and model head layer
+β, γ Maximum window size and sampling parameter for the attention block
+τ,Π Secret permutation of the vocabulary and its corresponding permutation
+matrix
+ˆP ,ˆQ Randomly generated key matrix and inverse key matrix
+define H as the parameter transformation group, which right-acts on Θ. The data-only obfuscation mechanism D is
+defined byD(x) :=σx. We can construct a covariant obfuscation mechanism formulated as follows:
+ϕX(x) :=τ σx, ϕ Θ(θ) :=τ θ, ϕ Y (y) :=τ y,
+ψY (y) :=τ −1y, ˜f=f,
+where τ∈S n is a token permutation sampled from the uniform distribution. Hence we have ˜f(ϕ X(x), ϕΘ(θ)) =
+f(τ σx, τ θ) =f(σx, θ) =f(D(x), θ) , hence eC =e D. On the other hand, LC =I(x;τ σx, τ θ)<
+I(x;τ σx, τ θ, τ) =I(x;σx, θ, τ) =I(x;σx) =L D.
+B.2 Proof of Composition Theorems
+Proof of Theorem 2:
+Proof.We separately prove the commutation and de-obfuscation conditions of covariant obfuscation.
+A. Commutation Condition:If the error of C1 is eC1, the error of C2 is eC2, and ˜g(˜x,˜ξ) satisfies the Lipschitz condition
+d(˜g(˜x1, ˜ξ),˜g(˜x2, ˜ξ))≤M gd(˜x1,˜x2)with respect to˜x, then we have
+d(˜h(ϕX(x),(ϕ Θ(θ), ϕΞ(ξ))), ϕZ ◦h(x,(θ, ξ)))
+≤d(˜g(˜f(ϕ X(x), ϕΘ(θ)), ξ), ϕZ ◦g(f(x, θ), ξ))
+≤d(˜g(˜f(ϕ X(x), ϕΘ(θ)), ξ),˜g(ϕY ◦f(x, θ), ξ))
++d(˜g(ϕY ◦f(x, θ), ξ), ϕ Z ◦g(f(x, θ), ξ)))
+≤M gd( ˜f(ϕ X(x), ϕΘ(θ)), ϕY ◦f(x, θ))
++d(˜g(ϕY ◦f(x, θ), ξ), ϕ Z ◦g(f(x, θ), ξ))).
+Thuse C2◦C1 ≤M geC1 +e C2.
+B. De-obfuscation Condition: ψZ ◦ϕ Z =id Z can be directly obtained from the de-obfuscation condition of
+(ϕ2
+Y , ϕΞ, ϕZ, ψZ,˜g).
+Proof of Theorem 3:
+Proof. A. Commutation Condition:
+If the distance function dY×Z on Y×Z satisfies the control condition with respect to the distance functions on Y and
+Z, then
+dY×Z (˜h(ϕX(x),(ϕ Θ(θ), ϕΞ(ξ))),(ϕ Y , ϕZ)◦h(x,(θ, ξ)))
+≤dY ( ˜f(ϕ X(x), ϕΘ(θ), ϕY ◦f(x, θ))
++d Z(˜g(ϕX(x), ϕΞ(ξ)), ϕZ ◦g(x, ξ))).
+B. De-obfuscation Condition:
+(ψY , ψZ)◦(ϕ Y , ϕZ) = (ψY ◦ϕ Y , ψZ ◦ϕ Z) = (idY ,id Z) =id Y×Z .
+20
+
+===== PAGE 21 =====
+Running Title for Header
+Proof of Theorem 4:
+Proof. A. Commutation Condition:
+If the distance function onYsatisfies translation invariance, then for anya 1, a2, b1, b2 ∈Z, we have
+d(a1 +b 1, a2 +b 2)≤d(a 1 +b 1, a2 +b 1) +d(a 2 +b 1, a2 +b 2)
+=d(a1, a2) +d(b 1, b2).
+Thus,
+dY (˜h(ϕX(x),(ϕ Θ(θ), ϕΞ(ξ))), ϕY ◦h(x,(θ, ξ)))
+=dY ( ˜f(ϕ X(x), ϕΘ(θ)) + ˜g(ϕX(x), ϕΞ(ξ)),
+ϕY (f(x, θ) +g(x, ξ)))
+≤dY ( ˜f(ϕ X(x), ϕΘ(θ)), ϕY ◦f(x, θ))
++d Y (˜g(ϕX(x), ϕΞ(ξ)), ϕY ◦g(x, ξ)).
+Therefore,e C1+C2 ≤e C1 +e C2.
+B. De-obfuscation Condition:Directly follows from the de-obfuscation conditions of (ϕX , ϕΘ, ϕZ, ψZ, ˜f) and
+(ϕY , ϕΞ, ϕZ, ψZ,˜g).
+C Information Leakage of Covariant Obfuscation
+We formalize the information leakage of covariant obfuscation.
+C.1 Auxiliary Lemmas
+Lemma 1.Suppose ˜Yis a normal distribution ofn-dimensional with meanµand covariance matrixΣ. Then
+H( ˜Y) = n
+2 log(2π) + 1
+2 log det Σ +n
+2
+Proof.Refer to Theorem 8.4.1 of [61].
+Lemma 2.Suppose x is a random variable on Rn, G and H are two groups, g∈G is a random variable on G
+following some distribution, and h∈H is a random variable on H following some distribution. The group G×H acts
+onR n viax7→gxh. Then we haveI(g;gxh) =I(g, h;gxh)− I(h;xh)
+Proof.
+I(g, h;gxh) =I(g;gxh) +I(h;gxh|g)
+=I(g;gxh) +I(h;xh)
+Thus,I(g;gxh) =I(g, h;gxh)− I(h;xh).
+From this lemma, we know that to compute the upper bound of I(g;g(θ+ϵ)h) , it suffices to compute the upper bound
+ofI(g, h;g(θ+ϵ)h)and the lower bound ofI(h; (θ+ϵ)h).
+C.2 Upper Bound of Mutual-Information under Group Action
+Theorem 7.Suppose x is an n-dimensional normal random vector in Rn with distribution x∼ N(µ,Σ) , where Σ is
+positive definite. Let G be a finite group, and g∈G a random element of G uniformly distributed over G. The finite
+groupGacts linearly onR n. Denote the adjoint of the linear transformationg:R n →R n asg ∗. Lety=gx. Then
+I(g;y)≤ 1
+2
+
+log det
+ 
+Σ−1 ¯Σ
+
++ (µ−¯µ)T ¯Σ−1(µ−¯µ)
+
+,
+where
+¯µ=Eg(gµ) = 1
+|G|
+X
+g∈G
+gµ, ¯Σ =E g(gΣg ∗).
+21
+
+===== PAGE 22 =====
+Running Title for Header
+Proof.First, we derive the mutual information as
+I(g;y) =H(y)−H(y|g) =H(y)−H(x).
+By Lemma 1, the entropy ofxis
+H(x) = n
+2 log(2π) + 1
+2 log det Σ +n
+2 .
+Moreover, H(y)≤H(˜y) , where ˜yis a normal random vector with the same mean and covariance matrix as y (the
+normal distribution maximizes entropy for fixed mean and covariance). It follows that
+H(y)≤H(˜y) = n
+2 log(2π) + 1
+2 log det Σy + n
+2 .
+Substituting these into the mutual information formula yields
+I(g;y)≤ 1
+2 (log det Σy −log det Σ).
+Note thatE[y] = 1
+|G|
+P
+g∈G gµ=E g(gµ), and
+E[yy T ] =E[gxx T g∗] =E g
+ 
+gEx[xxT ]g∗
+=E g
+ 
+g(Σ +µµ T )g∗
+=E g(gΣg ∗) +E g(gµµT g∗).
+We then compute the covariance matrixΣ y:
+Σy =E
+
+(y−E[y])(y−E[y]) T
+=E[yy T ]−(E[y])(E[y]) T
+=E g(gΣg ∗) +E g(gµµT g∗)−E g(gµ)Eg(gµ)T
+=E g(gΣg ∗) +E g
+
+(gµ−E g(gµ))(gµ−E g(gµ))T
+= ¯Σ +E g
+
+(gµ−E g(gµ))(gµ−E g(gµ))T
+= ¯Σ +E g
+
+(gµ−¯µ)(gµ−¯µ)T
+,
+where¯µ=E g(gµ)and ¯Σ =E g(gΣg ∗).
+Further, sinceΣis positive definite, ¯Σis also positive definite and thus invertible, leading to
+Σy = ¯Σ
+ 
+I+E g
+¯Σ−1(gµ−¯µ)(gµ−¯µ)T
+.
+We now expand the determinant term:
+log det Σy −log det Σ
+= log det
+ 
+I+E g
+¯Σ−1(gµ−¯µ)(gµ−¯µ)T
++ log det¯Σ−log det Σ
+= tr log
+ 
+I+E g
+¯Σ−1(gµ−¯µ)(gµ−¯µ)T
++ log det
+ ¯ΣΣ−1
+≤trE g
+¯Σ−1(gµ−¯µ)(gµ−¯µ)T
++ log det
+ ¯ΣΣ−1
+=E g
+
+tr
+ ¯Σ−1(gµ−¯µ)(gµ−¯µ)T
++ log det
+ 
+Σ−1 ¯Σ
+
+=E g
+
+(gµ−¯µ)T ¯Σ−1(gµ−¯µ)
+
++ log det
+ 
+Σ−1 ¯Σ
+
+=E g
+
+(µ−¯µ)T g∗ ¯Σ−1g(µ−¯µ)
+
++ log det
+ 
+Σ−1 ¯Σ
+
+= (µ−¯µ)T Eg
+
+g∗ ¯Σ−1g
+
+(µ−¯µ) + log det
+ ¯ΣΣ−1
+.
+Since ¯Σ =E g(gΣg ∗), we haveg −1 ¯Σ(g−1)∗ = ¯Σ, which impliesg ∗ ¯Σ−1g= ¯Σ−1. Substituting this identity gives
+log det Σy −log det Σ≤log det
+ 
+Σ−1 ¯Σ
+
++ (µ−¯µ)T ¯Σ−1(µ−¯µ).
+Finally, substituting back into the mutual information bound yields
+I(g;y)≤ 1
+2
+
+log det
+ 
+Σ−1 ¯Σ
+
++ (µ−¯µ)T ¯Σ−1(µ−¯µ)
+
+.
+22
+
+===== PAGE 23 =====
+Running Title for Header
+C.3 Lower Bound of Mutual Information Under Finite Group Actions
+Theorem 8.Suppose x is an n-dimensional normal random vector in Rn with distribution x∼ N(µ,Σ) , where Σ is
+positive definite. Let G be a finite group, and g∈G a random element uniformly distributed over G. G acts faithfully
+on Rn (a faithful action here means the group homomorphism G→GL(R n) induced by the action is injective, with
+only the identity element ofGacting as the identity linear transformation onR n). Lety=gx; then
+I(g;y)≥KL(δ∥δ 0),
+where
+δ= max{2Φ(ρ)−1, δ 0}, δ 0 = 1
+|G| ,
+ρ:= 1
+2 ming∈G ∥gµ−µ∥ Σ, and Φ denotes the cumulative distribution function (CDF) of the standard normal
+distribution.
+IdeaRegard the map G→R n given by g7→gx as an encoding process for elements ofG, and consider the maximum
+likelihood decoding: the map Rn →G given by y7→ˆg , where ˆgis the maximum likelihood decoder of g. First show
+that δ exceeds the accuracy of the maximum likelihood decoder y7→ˆg ; the result then follows via a method analogous
+to PAC-privacy theory.
+To prove Theorem 8, we first introduce the following lemmas:
+Lemma 3.The joint distribution of(g, Y)isG-invariant, and the marginal distribution ofYisG-invariant.
+Proof. For any fixed g0 ∈G , the linear action of g0 on Rn has all eigenvalues with absolute value 1, so the determinant
+of this linear transformation has absolute value 1. The conditional probability density function of Y=gX given g is
+thusf Y|g (y|g) =f X(g−1y), wheref X denotes the probability density function ofX.
+It follows that
+fg,Y (g, y) = 1
+|G| fX(g−1y).
+For anyg 1 ∈G, we have
+fg,Y (g1g, g1y) = 1
+|G| fX
+ 
+(g1g)−1g1y
+
+= 1
+|G| fX(g−1y) =f g,Y (g, y).
+This implies the joint distribution of (g, Y) is G-invariant, and consequently the marginal distribution of Y is G-
+invariant.
+Lemma 4.The maximum likelihood decoder ϕ:R n →G defined by ϕ(y) := arg maxg∈G fY|g (y|g) is a G-invariant
+deterministic map.
+Proof.Sincef Y|g (y|g) =f X(g−1y), the maximum likelihood decoder can be rewritten as
+ϕ(y) = arg max
+g∈G
+fX(g−1y).
+It is then straightforward to verify that
+ϕ(g1y) = arg max
+g∈G
+fX(g−1g1y) =g 1 arg max
+g−1
+1 g∈G
+fX
+ 
+(g−1
+1 g)−1y
+
+=g 1 arg max
+g∈G
+fX(g−1y) =g 1ϕ(y).
+Lemma 5.The distribution of˜gis uniform overG.
+Proof. By Lemma 3, Y has a G-invariant distribution. Since ˜g=ϕ(Y) , Lemma 4 implies the distribution of ˜gis
+G-invariant, hence uniform overG.
+23
+
+===== PAGE 24 =====
+Running Title for Header
+Lemma 6.The joint distribution of(g,˜g)isG-invariant.
+Proof. By Lemma 3, the pair (g, Y) has a G-invariant joint distribution. By Lemma 4, the deterministic map Y7→˜g is
+G-invariant, so the joint distribution of(g,˜g)isG-invariant.
+Lemma 7.For anyg∈G, the decoding error probabilitiesP(˜g̸=g)are identical, and satisfy
+P(˜g̸=g) =P(˜e̸=e) =P(∃g̸= 1s.t.f X(gX)> f X(X)).
+Proof.By Lemma 6, the joint distribution of(g,˜g)isG-invariant, soP(˜g̸=g) =P(˜e̸=e).
+Furthermore,˜e̸=eif and only if∃g̸= 1s.t.f X(gX)> f X(X). Thus
+P(˜e̸=e) =P(∃g̸= 1s.t.f X(gX)> f X(X)).
+Lemma 8.Letgbe a linear operator on a normed linear spaceV, and letx, µ∈V. Then
+∥x−µ∥ ≤ ∥gµ−µ∥
+1 +∥g∥ =⇒ ∥x−µ∥ ≤ ∥gx−µ∥,
+where∥g∥:= max(|λ(g)|)(the maximum absolute value of the eigenvalues ofg).
+Proof.From the left-hand side inequality, we have
+∥x−µ∥+∥gx−gµ∥ ≤(1 +∥g∥)∥x−µ∥ ≤ ∥gµ−µ∥.
+It follows that
+∥x−µ∥ ≤ ∥gµ−µ∥ − ∥gx−gµ∥ ≤ ∥gx−µ∥.
+Lemma 9.Let the finite groupGact on a normed linear spaceV, and letx, µ∈V. For anyg∈G:
+∥x−µ∥ ≤ ∥gµ−µ∥
+2 =⇒ ∥x−µ∥ ≤ ∥gx−µ∥.
+Proof. Since G is a finite group, every g∈G has all eigenvalues with absolute value 1. The result then follows directly
+from Lemma 6.
+Proof of Theorem 8.Note that in our case, the probability density function ofxis:
+fX(x) = 1
+(2π)n det Σ1/2 exp
+
+−1
+2(x−µ) T Σ−1(x−µ)
+
+.
+Thus,f X(gX)> f X(X)if and only if:
+(gX−µ) T Σ−1(gX−µ)<(X−µ) T Σ−1(X−µ).
+Let∥ · ∥ Σ :R n →Rbe defined bya7→
+√
+aT Σ−1a; it is easy to see that this is a norm onR n.
+Thus, we have the equivalence:
+fX(gX)> f X(X)⇐ ⇒ ∥gX−µ∥ Σ <∥X−µ∥ Σ.
+Hence:
+˜e=e⇐ ⇒For anyg̸= 1∈G,∥gX−µ∥ Σ ≥ ∥X−µ∥ Σ.
+lemma9
+⇐=For anyg̸= 1∈G,∥X−µ∥ Σ ≤ ∥gµ−µ∥Σ
+2 ,
+⇐ ⇒ ∥X−µ∥ Σ ≤ 1
+2 ming∈G
+g̸=1
+∥µ−gµ∥ Σ.
+Thus, we obtain a lower bound forP(˜e=e):
+P(˜e=e)≥P
+
+∥X−µ∥ Σ ≤ 1
+2 min
+g∈G
+g̸=1
+∥µ−gµ∥ Σ
+
+ .
+24
+
+===== PAGE 25 =====
+Running Title for Header
+That is,P(˜e=e)≥P(ρ≤ρ 0), where:
+ρ:=∥X−µ∥ Σ, ρ 0 := 1
+2 min
+g∈G
+g̸=1
+∥µ−gµ∥ Σ.
+Note thatρfollows the distribution of the absolute value of a standard normal random variable. Thus:
+P(ρ≤ρ 0) = Φ(ρ0)−Φ(−ρ 0) = 2Φ(ρ0)−1.
+Therefore, the decoding accuracy satisfies:
+P(˜e=e)≥2Φ(ρ 0)−1,whereρ 0 = 1
+2 min
+g∈G
+g̸=1
+∥µ−gµ∥ Σ.
+Let δ:= max{2Φ(ρ 0)−1, δ 0}, where δ0 := 1
+|G| is the decode success rate for random guess, then we have
+P(˜e=e)≥δ.
+Now consider the Markov chaing→(y=gx)→˜g; we have
+I(y;g)≥ I(˜g;g).
+Consider the deterministic map
+d:G×G→ {0,1}
+defined by
+d(g,˜g) = 1if and only ifg= ˜g.
+Consider the two distributions on G×G : fg,˜g(the joint distribution of (g,˜g)) and fg ⊗f ˜g(the product distribution of
+fg andf ˜g). We must have
+I(g,˜g) =KL(f g,˜g∥f g ⊗f ˜g)≥KL(d ∗fg,˜g∥d ∗ (fg ⊗f ˜g)),
+whered ∗νdenotes the pushforward of the measureνunderd.
+Note that fg(g)≡ 1
+|G| for any g∈G , and by Lemma 5, f˜g(g)≡ 1
+|G| for any g∈G . Thus d∗ (fg ⊗f ˜g) is a Bernoulli
+distribution with success probability δ0 = 1
+|G|. On the other hand, d∗fg,˜gis a Bernoulli distribution with success
+probability greater or equal toδ. Therefore:
+I(g,˜g)≥KL(d ∗fg,˜g∥d ∗ (fg ⊗f ˜g))≥KL(δ∥δ 0).
+C.4 Finite Group Upper Bound
+Combine the Lemma 2, Theorem 7, Theorem 8, we have
+Theorem 9.Suppose x is a normally distributed random variable on Rn with x∼N(µ,Σ) ; G is a finite group, and
+g∈G is a random variable uniformly distributed over G; H is a finite group, and h∈H is a random variable
+uniformly distributed over H; the group G×H acts on Rn via x7→gxh , where the action of group H is faithful.
+Denoteg ∗, h∗ as the adjoint of the linear transformationg:R n − →Rn,h:R n − →Rn, respectively. Then we have
+I(g;gxh)≤A−B
+where
+A= 1
+2
+
+log det Σ−1 ¯Σ + (µ−¯µ)T Σ−1(µ−¯µ)
+
+with¯µ=E g,h(gµh) = 1
+|G||H|
+P
+g∈G,h∈H gµhand ¯Σ =E g,h((g⊗h)Σ(g ∗ ⊗h ∗));
+and
+B=KL(δ∥δ 0), δ= max{2Φ(ρ)−1, δ 0}, δ 0 = 1
+|H|
+where ρ:= 1
+2 minh̸=e∈H ∥µ−µh∥ Σ, and Φ is the cumulative distribution function of the standard normal distribution.
+25
+
+===== PAGE 26 =====
+Running Title for Header
+Remark 1.Consider the special case where H={e} ; in this case, we obtain the last (and largest) upper bound of
+I(g;g(θ+ϵ)h):
+I(g;g(θ+ϵ)h)≤A
+where
+A= 1
+2
+
+log det Σ−1 ¯Σ + (µ−¯µ)T Σ−1(µ−¯µ)
+
+with¯µ=E g(gµ) = 1
+|G|
+P
+g∈G gµand ¯Σ =E g(gΣg ∗). In the case of Aloepri, we obtain
+A= n−1
+2 log detC
+where
+C=I 2d + 1
+n−1
+
+σ−1
+e W T
+embed
+σ−1
+h Whead
+
+In − 1
+n Jn
+ σ−1
+e Wembed
+σ−1
+h W T
+head
+T
+.
+D AloePri as Group Action
+To analyze the information leakage ofAloePri, we first state the following lemma:
+Lemma 10.Let Pi ∈M d,d+2h and P j ∈M d+2h,d be generated by Algorithm 1, corresponding to ˆP and ˆQ
+respectively. Then there exist an invertible square matrixP∈M d+2h,d+2h and matrices Ri, Rj ∈M d,h such that for
+i= 1, . . . , m;j= 1, . . . , n:
+•P i = (Id, Ri, Od,h)P
+•P j =P −1(Id, Od,h, Rj)T
+Proof. Let Pi = (B, Ci, E)Z and P j =
+ 
+(BT )−1, F, Dj
+Z
+T
+. By construction, we have rank(E) = rank(F) =
+h/2. Furthermore, it is straightforward to verify that
+(Ci, E)
+F T
+DT
+j
+
+=O 2h
+for alli= 1, . . . , m;j= 1, . . . , n.
+Let U⊂R 2h denote the subspace spanned by the rows of all(Ci, E), and V⊂R 2h denote the subspace spanned by the
+rows of all(F, Dj). Then R2h admits an orthogonal direct sum decompositionR2h =U⊕V with dimU= dimV=h .
+Let {w1, . . . , wh} be an orthonormal basis for U, {wh+1, . . . , w2h} be an orthonormal basis for V , and let Ω∈M 2h,2h
+be the matrix with rowsw 1, . . . , w2h. It follows thatΩis an orthogonal matrix, satisfying:
+•u= (u 1,0)Ωfor allu∈U
+•v= (0, v 1)Ωfor allv∈V
+We then have:
+Pi = (Id, Ri, Od,h)
+
+B O
+OΩ
+
+Z,
+P j =
+
+(Id, Od,h, Rj)
+
+BT O
+OΩ
+
+Z
+T
+.
+LetP:=
+
+B O
+OΩ
+
+Z. It then follows that
+Pi = (Id, Ri, Od,h)P, P j =P −1(Id, Od,h, Rj)T .
+26
+
+===== PAGE 27 =====
+Running Title for Header
+E Attack Success Rate for Covariant Obfuscation
+In this section, we focus on the LLM text generation scenario, where X=Z l
+n, Y=Z n and G=S n. We consider
+covariant obfuscation induced by group actions. We follow the idea of PAC privacy [22] and give the bound of attack
+success rate.
+E.1 Static Attack Success Rate
+We assume the attacker only holds the plaintext model θ∈Θ and the obfuscated model ˜θ=ϕ Θ(θ) =g(θ+ϵ)h . The
+attacker’s goal is to find an approximation˜g∈Map(Zn,Z n)ofg∈S n such that
+˜g◦g≈I Zn
+whereI Zn denotes the identity map onZ n.
+Theorem 10.Suppose a static attacker recovers ˜gby recovering each obfuscated token independently. Then the success
+probabilitypof recovering a single obfuscated token satisfies
+KL(p∥p 0)≤ 1
+n I(g; ˜θ)
+wherep 0 = 1
+n.
+Proof. Note that we assume the attacker recovers ˜gby recovering each obfuscated token independently here, so we
+only have˜g∈Map(Z n,Z n)(instead of˜g∈S n).
+For the Markov chaing→ ˜θ→˜g, it holds that
+I(g; ˜g)≤ I(g; ˜θ).
+Let ci be a binary random variable where ci = 1 if ˜g(i) =g−1(i) (i.e., the i-th obfuscated token is recovered correctly)
+and ci = 0 otherwise. Since each token is recovered independently, {c1, . . . , cn} are i.i.d. Bernoulli random variables
+withP(c i = 1) =p. Thus
+nX
+i=1
+ci ∼Binomial(n, p)
+Consider the deterministic mapΦ :S n ×Map(Z n,Z n)→Rdefined by
+Φ(g,˜g) =
+nX
+i=1
+I
+ 
+˜g(i) =g−1(i)
+
+whereI(·)is the indicator function.
+Under the mapΦ:
+• The joint distributionf g,˜gis pushed forward to Binomial(n, p);
+• The product distribution fg ⊗f ˜gis pushed forward toBinomial(n, p0), where p0 = 1
+n is the success probability
+of random guessing for a single token.
+We then obtain the following chain of inequalities:
+KL(Binomial(n, p)∥Binomial(n, p 0))≤KL(f g,˜g∥f g ⊗f ˜g)
+=I(g; ˜g)
+≤ I(g; ˜θ)
+whereKL(· ∥ ·)denotes the Kullback-Leibler divergence.
+On the other hand, we have
+KL(Binomial(n, p)∥Binomial(n, p 0)) =nKL(p||p 0).
+Hence we haveKL(p||p 0)≤ 1
+n I(g; ˜θ)
+27
+
+===== PAGE 28 =====
+Running Title for Header
+Figure 6: KL Divergence vs. Token Recovery Success Probability
+We plot the relationship betweenKL(p∥p 0)andpin Figure 6 (withn= 151936for Qwen2.5 models):
+Combining Theorem 9 and Theorem 10, we obtain the following result:
+Theorem 11.The success probabilitypof a static attack satisfies
+KL(p∥p 0)≤ 1
+n(A−B)
+where
+A= 1
+2(µ−¯µ)T Σ−1(µ−¯µ)with¯µ=E g,h1 (gµh1),
+B=KL(δ∥δ 0), δ= max{2Φ(ρ)−1, δ 0},
+δ0 = 1
+|H1| , ρ= 1
+2 min
+h1∈H1
+∥µ−µh 1∥Σ.
+Here, H1 < H is a discrete subgroup preserving the distribution f(h); h1 is a random variable uniformly distributed
+overH 1; andΦdenotes the cumulative distribution function (CDF) of the standard normal distribution.
+E.2 Dynamic Attack Success Rate
+In this section, we assume the attacker holds the plaintext model θ∈Θ , the obfuscated model ˜θ=ϕ Θ(θ) =g(θ+ϵ)h ,
+and obfuscated user input tokens x∈Z l
+n. The attacker’s goal is to find an approximation˜g∈Map(Zn,Z n) of g∈S n
+such that
+˜g◦g≈I Zn
+whereI Zn denotes the identity map onZ n. We then have the following theorem:
+Theorem 12.The following statements hold: 1. I(g;gx, g(θ+ϵ)h)≤ I(g;g(θ+ϵ)h) +I(g;gx) ; 2. The success
+probabilitypof a dynamic attack satisfiesKL(p∥p 0)≤ 1
+n(A−B+C), where
+A= 1
+2(µ−¯µ)T Σ−1(µ−¯µ)with¯µ=E g,h1 (gµh1),
+B=KL(δ∥δ 0), δ= max{2Φ(ρ)−1, δ 0}, δ 0 = 1
+|H1| ,
+ρ= 1
+2 min
+h1∈H1
+∥µ−µh 1∥Σ.
+Here, H1 < H is a discrete subgroup preserving the distribution f(h); h1 is a random variable uniformly distributed
+over H1; Φ denotes the cumulative distribution function (CDF) of the standard normal distribution; and C=I(g;gx)
+is a term that only depends on the length and distribution of the input sequencex.
+Proof.We first prove the first inequality:
+I(g;gx, g(θ+ϵ)h)
+≤H(gx, g(θ+ϵ)h)−H(gx, g(θ+ϵ)h|g)
+=H(gx, g(θ+ϵ)h)−H(g(θ+ϵ)h|g)−H(gx|g)
+≤H(g(θ+ϵ)h) +H(gx)−H(g(θ+ϵ)h|g)−H(gx|g)
+=I(g;g(θ+ϵ)h) +I(g;gx).
+28
+
+===== PAGE 29 =====
+Running Title for Header
+Similar to the proof of Theorem 10, we have KL(p∥p 0)≤ 1
+n I(g;gx, g(θ+ϵ)h) . Substituting the above inequality
+gives
+KL(p∥p 0)≤ 1
+n [I(g;g(θ+ϵ)h) +C].
+From Theorem 9, we haveI(g;g(θ+ϵ)h)≤A−B. Combining these results yields
+KL(p∥p 0)≤ 1
+n(A−B+C).
+F Experiment Details
+F.1 Potential Threats
+Vocabulary-Matching Attack (VMA). AloePri protect privacy by mapping plaintext tokens of private text to
+obfuscated tokens via a permutation Π. With knowledge of the obfuscated model weights, attackers can attempt to
+map each obfuscated token back to its original plaintext token. This threat leverages the V ocabulary-Matching Attack
+(VMA) proposed by Thomas et al. [ 25], which is capable of recovering permutation matrices Z1 and Z2 from the
+known relationshipY=Z 1XZ2 (whereXis a known matrix andYis the observed obfuscated matrix).
+KnownX ObservedY
+WembedWhead ΠW⋆embedWheadΠT
+WembedWquery(WembedWkey)T ΠW⋆embedWquery(ΠW⋆embedWkey)T
+WembedWgate ΠW⋆embedWgateˆZffn
+WembedWup ΠW⋆embedWupˆSffnˆZffn
+WdownWhead ˆZ−1
+ffn ˆS−1
+ffnWdownW⋆headΠT
+WembedWrouter ΠW⋆embednorm(Wrouter)ˆZrouter
+Table 8: Weight combinations to recoverΠwith VMA
+The core idea of VMA is to first eliminate one permutation matrix through column-wise sorting, then recover the other
+one via neighbor matching. Specifically, let RowSort(·) denote the sorting operation along each row. it holds that
+RowSort(Y) =RowSort(XZ 2). By comparing the rows of RowSort(XZ2) and RowSort(X), attackers can recover
+Z1. Table 8 summarizes weight combinations in AloePri that exhibit a similar structural relationship to Y=Z 1XZ2.
+For AloePri, weights from multiple decoder layers can be used to conduct VMA. Therefore, we adopt a voting
+mechanism to utilize VMA results of all layers.
+Invariant Attack (IA). Obfuscation mechanisms are vulnerable to this attack if they exhibitinvariantswhich remain
+unchanged during the obfuscation transformation [34]. Based on AloePri’s offline model obfuscation process, we
+present two types of IAs: Gate-IA and Attn-IA.
+Gate-IA: This attack leverages Wgate to exploit statistical invariants. Let e andee represent the plaintext and obfuscated
+embedding vectors, respectively. If no noise is added to the embedding layer ( αe = 0), permutation preserves the
+statistical property of gate-weighted embeddings, resulting in Avg(eWgate) =Avg(eefWgate). This average value serves
+as an invariant: it remains consistent between plaintext and obfuscated data. Attackers can use gate weights from
+different decoder layers to construct such invariant vectors, thereby reversing the token mapping relationship. To defend
+against Gate-IA, AloePri must add sufficient noise to embeddings by increasing αe so that the statistical consistency
+of the invariant is disrupted.
+Attn-IA: This attack splits Wquery and Wkey into blocks (aligned with RoPE block structures) to exploit mathematical
+invariants. For analysis, we first ignore the head permutation and block permutation techniques introduced in Algorithms
+2. Let W (i)
+query andfW (i)
+query denote the plaintext and obfuscated weights of the i-th attention head, respectively. Defineq=
+e·W (i)
+query = [q1,· · ·, q dhead
+2
+],eq= ee· fW (i)
+query = [eq1,· · ·,eqdhead], Q=W embedW (i)
+query, and eQ= fWembedfW (i)
+query. For any
+block index j, if e andeecorrespond to the same token, the mathematical relationship e(QT [:, j]Q[:, j])−1eT =ee(eQT [:
+, j]eQ[:, j])−1eeT holds as an invariant. Attackers can iterate over all embeddings to verify this invariant relationship,
+enabling recovery of Π. To defend against Attn-IA, in addition to noise addition, AloePri applies permutation over
+attention heads and blocks to further enhances security by breaking the block-wise consistency required for the invariant
+to hold.
+29
+
+===== PAGE 30 =====
+Running Title for Header
+Internal State Attack (ISA). The attack optimizes input embeddings by leveraging the loss derived from hidden states.
+Specifically, the attacker first records the hidden statesState1 when clients request inference using their private input
+X1. Subsequently, attackers randomly initialize X2 and feeds it into the pretrained model to evaluate State2. The
+attacker can use State1 and State2 to evaluate the loss, thereby optimizing X2 to recover X1. In AloePri, model
+weights are perturbed with noise and transformation, so that all hidden states during the forward computation process
+are also noisy and transformed. Consequently, the recovered input data through ISA would differ significantly from the
+original model input, and cannot be directly used to recover private information.
+Inversion Model Attack (IMA). With knowledge of the obfuscation mechanism, the attacker can train a model for
+embedding inversion [26]. During the training process, the attacker iterates over a public training dataset and generates
+obfuscated embeddings using the target obfuscation mechanism. With these obfuscated embeddings as inputs, the
+attacker trains the model to generate raw plaintext embeddings or token indices. In the experiments, we train a Qwen2
+model with 2 decoder layers and 8 attention heads to invert obfuscated embeddings to plaintext token embeddings.
+Token Frequency Leakage. AloePri applies the deterministic token obfuscation based on the secret permutation.
+Therefore, an obfuscated text can be regarded as a substitution cipher and still retains the information about the statistical
+distribution of token frequencies in the plaintext. To investigate how token-level frequency information impacts privacy,
+we test the token frequency matching attack (TFMA) and the substitution deciphering attack (SDA) [27]. In both types
+of attacks, attackers attempt to recover substitution ciphertext based on word frequency information from a prior dataset.
+In TFMA, the attacker uses the prior dataset to count token frequencies, which are then used to match the frequency of
+ciphertext tokens in the client’s data for token recovery. SDA introduces a recurrence encoding that converts substitution
+ciphers (1:1 and homophonic) into integer sequences by replacing every unique cipher symbol with an integer symbol
+standing for its frequency rank. A Transformer-based causal language model is trained on pairs of plain and cipher texts
+to learn symbol recurrence relations. Then the model is used to translate subsequent ciphertexts to plaintexts.
+F.2 Hyperparameter Setting
+For all experiments, we fix the generation hyperparameters as follows: temperature = 0.65, top-k = 20, top-p = 0.95,
+maximum sequence length (max-seq-len) = 8192, and data type (dtype) = bfloat16. Table 9 summarizes the privacy
+hyperparameters adopted in our experiments, including the noise coefficients for the embedding layer and model head
+(αe, αh), expansion sizeh, coefficient of the key matrixλ, and block permutation parametersβ, γfor attention layers.
+Table 9: Privacy hyperparameter settings of experiments.
+Experiment αe αh λ h β γ
+Fig. 3 △1 △0.3 128 81e 3
+Fig. 4 1.0 0.2△128 81e 3
+Fig. 5 1.0 0.2 0.3△81e 3
+Tab. 1, 5, 6 1.0 0.2 0.3 128 81e 3
+Tab. 2 0.5,1.02 0.2 0.3 128 81e 3
+Tab. 3 1.0 0.2△128△ △
+1 △denotes the hyperparameter tuned in the corresponding experiment.
+2 αe is set to 0.5 for Llama3-8B and 1.0 for all other models.
+F.3 Comparison Experiment
+Hyperparameter Settings for Baselines. In the experiment presented in Table 1, we tuned the hyperparameters of the
+baseline methods and AloePri to ensure a fair comparison. For SANTEXT and RANTEXT, we set their privacy budgets to
+3 and 30, respectively. For DP-Forward, we adopted the LDP mode and set the privacy budget to 5. Additionally, we
+set the sensitivity to 1. We positioned the noise injection at the hidden states of the 1st decoder layer, thereby offloading
+the embedding layer and the first decoder layer (accounting for nearly 1B parameters) to the client. Meanwhile, the
+hidden states were not normalized before noise injection to avoid substantial accuracy loss in the Qwen model.
+To reproduce SGT, we trained a 1.6B-parameter model following the Qwen2 architecture, which is used to generate the
+mean and covariance of embedding noise. This model comprises 2 decoder layers, 8 attention heads, a hidden size of
+5120, and an intermediate size of 20480 for FFN. We trained the model on 1M text samples from the OpenOrca dataset
+and determined the training parameters through grid search. Specifically, we set the learning rate to 3e−4 and trained
+the model for 2 epochs. We also set the coefficients for accuracy loss, MI loss, absolute cosine loss, and normalization
+loss to1.0,3e −5,30, and1.0, respectively.
+30
+
+===== PAGE 31 =====
+Running Title for Header
+Benchmark Settings. In the classification task SST2, we fine-tuned the model on the target task using LoRA [ 62].
+We apply LoRA to attention weights and set lora_r= 64, lora_alpha= 64 . We set the learning rate to 2e−5 for 3
+training epochs with a sequence length of 128 and batch size of 64. We evaluated the classification task following the
+recommended application methods of each method. Specifically, for SANTEXT and RANTEXT, we first obfuscated the
+training and validation sets using these methods, followed by fine-tuning and inference. For DP-Forward, noise was
+injected to the outputs of decoder layers in both fine-tuning and inference processes. For SGT and AloePri, we only
+applied obfuscation during the inference phase.
+Generation tasks do not involve fine-tuning or training processes. Thus, in the evaluation of generation tasks, we directly
+applied obfuscation methods to the inference process.
+F.4 Simulation of Mutual Information
+We use the Contrastive Log-ratio Upper Bound (CLUB) estimator to simulate the mutual information of both baseline
+methods and AloePri. In the case of unknown conditional distribution, CLUB simulates the mutual information
+I(x;y)between two random variablesx,yby:
+ˆIvCLUB = 1
+N
+NX
+i=1
+
+logq θ(yi|xi)− 1
+N
+NX
+j=1
+logq θ(yi|xi)
+
+ ,
+where qθ is neural network-parameterized variational distribution that approximates unknown conditional distributions.
+We simulate the mutual information to compare SANTEXT and RANTEXT based on token-level obfuscation, DP-Forward
+and SGT based on embedding-level obfuscation, and AloePri based on covariant obfuscation. For a fair comparison,
+we uniformly adopt embeddings for mutual information simulation, wherex and y in I(x;y) correspond to the plaintext
+and obfuscated embeddings after normalization, respectively. Thus, for SANTEXT, RANTEXT, and AloePri, we convert
+the plaintext token indices and obfuscated token indices to their corresponding embeddings. Furthermore, for AloePri,
+the obfuscated model parameterseθare also known to the attacker, so the simulation target isI(x;y, eθ).
+31

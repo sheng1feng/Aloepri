@@ -1,0 +1,23 @@
+# Python cache / test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local scratch / temp
+.tmp_pdf_pages/
+.tmp*/
+*.log
+
+# Large local artifacts and generated outputs
+artifacts/
+outputs/
+model/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Optional virtualenvs
+.venv/
+venv/

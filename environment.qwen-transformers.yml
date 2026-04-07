@@ -1,0 +1,12 @@
+name: qwen-transformers
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - torch>=2.2
+      - transformers>=4.45
+      - accelerate>=0.34
+      - safetensors>=0.4
+      - pytest>=8.0
