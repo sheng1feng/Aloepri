@@ -3,7 +3,16 @@ from __future__ import annotations
 from src.aloepri.config import AloePriConfig
 from src.aloepri.engine import AloePriEngine
 from src.aloepri.keys import AloePriKeys, build_aloepri_keys
-from src.aloepri.adapters import QwenArchitectureAdapter, build_qwen_config, is_qwen_compatible_model
+from src.aloepri.adapters import (
+    LlamaArchitectureAdapter,
+    QwenArchitectureAdapter,
+    build_architecture_config,
+    build_llama_config,
+    build_qwen_config,
+    get_architecture_adapter,
+    is_llama_compatible_model,
+    is_qwen_compatible_model,
+)
 from src.aloepri.catalog import StageCatalogEntry, default_stage_catalog, stage_catalog_payload
 from src.aloepri.pipelines import (
     build_stage_a_bundle,
@@ -25,8 +34,13 @@ __all__ = [
     "AloePriEngine",
     "AloePriKeys",
     "build_aloepri_keys",
+    "LlamaArchitectureAdapter",
     "QwenArchitectureAdapter",
+    "build_architecture_config",
+    "build_llama_config",
     "build_qwen_config",
+    "get_architecture_adapter",
+    "is_llama_compatible_model",
     "is_qwen_compatible_model",
     "StageCatalogEntry",
     "default_stage_catalog",

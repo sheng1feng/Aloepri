@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from typing import Optional, Iterable, Dict, Any
 
-from src.aloepri.adapters.qwen import QwenArchitectureAdapter
+from src.aloepri.adapters import get_architecture_adapter
 from src.aloepri.config import AloePriConfig
 from src.aloepri.keys import build_aloepri_keys, AloePriKeys
 from src.aloepri.layers.norm import wrap_norm
@@ -33,7 +33,7 @@ class AloePriEngine:
         tokenizer: Any,
         **config_overrides,
     ) -> "AloePriEngine":
-        QwenArchitectureAdapter.from_model(model)
+        get_architecture_adapter(model)
         config = AloePriConfig.from_model(model, **config_overrides)
         return cls(config=config, tokenizer=tokenizer)
 
@@ -41,7 +41,7 @@ class AloePriEngine:
         """
         Applies full AloePri obfuscation to the model.
         """
-        QwenArchitectureAdapter.from_model(model)
+        get_architecture_adapter(model)
         # 1. Prepare Stage A model (token permutation)
         stage_a_model, perm_vocab, inv_perm_vocab = prepare_stage_a_model(
             model, self.tokenizer, self.config.seed

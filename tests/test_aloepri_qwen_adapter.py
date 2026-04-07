@@ -96,3 +96,9 @@ def test_build_qwen_config_uses_model_structure() -> None:
     assert config.adapted_layers == [0, 1]
     assert config.architecture_family == "qwen_decoder"
     assert config.model_type == "qwen2"
+
+
+def test_qwen_adapter_rejects_non_qwen_model_type() -> None:
+    model = _Model()
+    model.config.model_type = "llama"
+    assert is_qwen_compatible_model(model) is False

@@ -8,29 +8,29 @@ def _require_attr(obj: Any, path: str):
     current = obj
     for part in path.split("."):
         if not hasattr(current, part):
-            raise ValueError(f"Missing required Qwen-architecture attribute: {path}")
+            raise ValueError(f"Missing required Llama-architecture attribute: {path}")
         current = getattr(current, part)
     return current
 
 
 @dataclass(frozen=True)
-class QwenArchitectureAdapter:
+class LlamaArchitectureAdapter:
     """
-    Structural adapter for Qwen-style decoder-only causal LM models.
+    Structural adapter for Llama-style decoder-only causal LM models.
 
-    This adapter intentionally validates by module layout instead of by a fixed
-    `model_type` string, so it can cover Qwen checkpoints of different sizes as
-    long as they expose the same decoder architecture contract.
+    Unlike the Qwen adapter, this adapter intentionally validates that the
+    checkpoint identifies itself as the Llama family, so that similarly-shaped
+    decoder architectures do not get misclassified.
     """
 
     model: Any
 
     @classmethod
-    def from_model(cls, model: Any) -> "QwenArchitectureAdapter":
+    def from_model(cls, model: Any) -> "LlamaArchitectureAdapter":
         config = _require_attr(model, "config")
         model_type = str(getattr(config, "model_type", "")).lower()
-        if "qwen" not in model_type:
-            raise ValueError(f"Expected a Qwen-family model_type, got {model_type!r}")
+        if model_type != "llama":
+            raise ValueError(f"Expected model_type='llama', got {model_type!r}")
 
         _require_attr(model, "config.hidden_size")
         _require_attr(model, "config.num_hidden_layers")
@@ -41,7 +41,7 @@ class QwenArchitectureAdapter:
         _require_attr(model, "lm_head")
         layers = _require_attr(model, "model.layers")
         if len(layers) == 0:
-            raise ValueError("Qwen-architecture model must have at least one decoder layer.")
+            raise ValueError("Llama-architecture model must have at least one decoder layer.")
         layer0 = layers[0]
         _require_attr(layer0, "self_attn.q_proj")
         _require_attr(layer0, "self_attn.k_proj")
@@ -80,15 +80,21 @@ class QwenArchitectureAdapter:
 
     @property
     def head_dim(self) -> int:
+        explicit = getattr(self.config, "head_dim", None)
+        if explicit is not None:
+            return int(explicit)
         return self.hidden_size // self.num_attention_heads
 
     @property
     def rope_theta(self) -> float:
-        return float(getattr(self.config, "rope_theta", 10000.0))
+        rope_theta = getattr(self.config, "rope_theta", None)
+        if rope_theta is None:
+            return 10000.0
+        return float(rope_theta)
 
     @property
     def model_type(self) -> str:
-        return str(getattr(self.config, "model_type", "qwen"))
+        return str(getattr(self.config, "model_type", "llama"))
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -106,15 +112,15 @@ class QwenArchitectureAdapter:
         }
 
 
-def is_qwen_compatible_model(model: Any) -> bool:
+def is_llama_compatible_model(model: Any) -> bool:
     try:
-        QwenArchitectureAdapter.from_model(model)
+        LlamaArchitectureAdapter.from_model(model)
         return True
     except Exception:
         return False
 
 
-def build_qwen_config(
+def build_llama_config(
     model: Any,
     *,
     expansion_size: int = 128,
@@ -133,7 +139,7 @@ def build_qwen_config(
 ):
     from src.aloepri.config import AloePriConfig
 
-    adapter = QwenArchitectureAdapter.from_model(model)
+    adapter = LlamaArchitectureAdapter.from_model(model)
     return AloePriConfig(
         hidden_size=adapter.hidden_size,
         num_hidden_layers=adapter.num_hidden_layers,
@@ -154,6 +160,6 @@ def build_qwen_config(
         device=device,
         dtype=dtype,
         adapted_layers=list(range(adapter.num_hidden_layers)) if adapted_layers is None else adapted_layers,
-        architecture_family="qwen_decoder",
+        architecture_family="llama_decoder",
         model_type=adapter.model_type,
     )

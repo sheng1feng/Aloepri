@@ -45,6 +45,6 @@ class AloePriConfig:
 
     @classmethod
     def from_model(cls, model, **overrides) -> "AloePriConfig":
-        from src.aloepri.adapters.qwen import build_qwen_config
+        from src.aloepri.adapters import build_architecture_config
 
-        return build_qwen_config(model, **overrides)
+        return build_architecture_config(model, **overrides)
