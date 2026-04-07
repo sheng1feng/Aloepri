@@ -120,6 +120,19 @@ conda run --no-capture-output -n qwen-transformers python scripts/infer_stage_k_
   --max-new-tokens 8
 ```
 
+### 方式 B：client/server 分离使用
+
+如果你不是一体化运行，而是要把模型交给 server 使用、client 单独做输入输出处理，请看：
+
+- `docs/Llama-3.2-3B客户端与Server使用说明.md`
+
+那份文档会直接告诉你：
+
+- server 该加载哪个目录
+- client 该拿哪个 `client_secret.pt`
+- client 怎么准备输入
+- client 怎么恢复输出
+
 ---
 
 ## 5. 如果你只想验证原始模型能不能跑
