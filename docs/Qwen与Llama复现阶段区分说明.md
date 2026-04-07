@@ -38,6 +38,33 @@
 
 > **阶段 J 解决“模型能不能变成标准形状并恢复功能”，阶段 K 解决“这些模型工件能不能被整理成可交付、可选 profile、可直接推理的发布目录”。**
 
+补充说明：
+
+这里的 `release` 不等于“又发明一种新模型格式”。
+
+更准确地说：
+
+- **HF 工件层**：
+  - 指单个标准 Hugging Face 模型目录
+  - 例如：
+    - `config.json`
+    - `tokenizer.json`
+    - `model.safetensors`
+  - 只是其中参数已经被混淆
+
+- **Stage K release 层**：
+  - 是把多个这样的标准 HF 混淆工件再组织成一个统一交付包
+  - 多出来的东西包括：
+    - `catalog.json`
+    - `deployment_contract.json`
+    - `profiles/`
+    - 统一推理入口
+
+所以可以这样理解：
+
+> **单个 obfuscated HF checkpoint = “像 Hugging Face 下载模型那样的目录，只是参数被混淆”**  
+> **Stage K release = “若干个这样的 obfuscated HF checkpoint，再加一层交付包装”**
+
 ---
 
 ## 2. Qwen 路线：当前到哪一步
@@ -105,19 +132,45 @@ Llama 当前已经达到：
 
 > **真实 `Llama-3.2-3B` 可导出为混淆后的标准 HF 格式模型，并完成了 4090 上的 correctness 验证。**
 
+### 这些 Llama 工件怎么理解
+
+当前最关键的两个工件是：
+
+#### `artifacts/stage_i_llama_real`
+
+- 最小标准 HF 混淆模型
+- 只混 `token-space`
+- 适合做 correctness baseline 和 client/server 契约验证
+
+#### `artifacts/stage_j_llama_real_full_square`
+
+- full-layer 标准 HF 混淆模型
+- 混 `token-space + full hidden-space`
+- 更接近真实交付目标
+
+一句话区分：
+
+- `Stage I`：最小混淆 HF 工件
+- `Stage J`：完整 full-layer 混淆 HF 工件
+
 ### 还没完成的部分
 
-和 Qwen 相比，Llama 当前还没有**完成**：
+此前和 Qwen 相比，Llama 还没有**完成**：
 
 - `Stage K` 风格的统一 release 包装
 - `vLLM` 侧实跑
 - 更系统的噪声扫描 / 安全评估
 
-但当前已经具备继续推进所需的脚本：
+其中前两项中的 Stage K 包装，现在已经完成：
 
 - `scripts/run_stage_j_llama_real_noise_calibration.py`
 - `scripts/export_stage_k_llama_release.py`
 - `scripts/run_llama_3b_stagek_pipeline.sh`
+
+当前仍未完成的主要是：
+
+- `vLLM` 侧实跑
+- 更系统的安全/攻击评估
 
 因此 Llama 当前最准确的阶段定位是：
 
@@ -135,8 +188,8 @@ Llama 当前已经达到：
 | 架构接入 | 完成 | 完成 |
 | Stage I 标准 HF 工件 | 完成 | 完成 |
 | Stage J standard-shape full-layer | 完成 | 完成 |
-| Stage J 噪声定标 | 完成 | 脚本已准备，待云端执行 |
-| Stage K 统一发布目录 | 完成 | 脚本已准备，待云端执行 |
+| Stage J 噪声定标 | 完成 | 完成 |
+| Stage K 统一发布目录 | 完成 | 完成 |
 | 云端真实 correctness | 完成 | 完成 |
 | vLLM 实跑 | 环境阻塞 | 尚未开始 |
 | 安全/攻击评估 | 尚未开始 | 尚未开始 |
@@ -147,7 +200,11 @@ Llama 当前已经达到：
 
 当前更准确的项目状态表述应该是：
 
-> **Qwen 主线已经完成 A–K 的完整复现与交付包装；Llama-3.2-3B 已完成架构接入、Stage I、Stage J 和真实 4090 correctness 验证，但尚未独立推进到 Stage K 的统一 release 包装。**
+> **Qwen 主线已经完成 A–K 的完整复现与交付包装；Llama-3.2-3B 也已经完成架构接入、Stage I、Stage J、真实 4090 correctness 验证、真实噪声定标与独立 Stage K release 包装。**
+
+如果需要对接手者进一步解释“它和官网下载的 HF 模型有什么区别”，建议使用下面这句：
+
+> **这些工件在目录结构和加载方式上与官方 HF 模型兼容，但它们不是明文模型，而是 obfuscated checkpoint；server 端只持有混淆后的标准 HF 工件，client 端必须额外持有 `client_secret.pt` 来完成输入映射和输出恢复。**
 
 ---
 

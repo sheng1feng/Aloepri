@@ -126,7 +126,98 @@ conda run --no-capture-output -n qwen-transformers python scripts/run_stage_j_ll
 
 > 基于本地 `Llama-3.2-3B` tokenizer/config 与随机 mock Llama baseline，Stage J 的 standard-shape full-layer 路线已经在本机闭环成立。
 
-## 5. 当前边界
+## 5. 云端真实 `Llama-3.2-3B` 验证结果
+
+云端真实模型目录：
+
+- `/home/nss-d/dcy/codes/ModelSplit/models/Llama-3.2-3B`
+
+云端仓库目录：
+
+- `/home/nss-d/sf/Aloepri`
+
+### 5.1 Stage I artifact sanity
+
+结果文件：
+
+- `outputs/stage_i_llama/real_artifact_sanity.json`
+
+关键结果：
+
+- `server_load_success = true`
+- `perm_vocab_match_export = true`
+- `inv_perm_vocab_match_export = true`
+- `embed_weight_max_abs_diff = 0.0`
+- `lm_head_weight_max_abs_diff = 0.0`
+- `max_parameter_abs_diff = 0.0`
+- `parameter_count_checked = 254`
+- `perm_is_valid = true`
+- `special_ids_fixed = true`
+- `tail_rows_fixed = true`
+
+解释：
+
+> 真实 `Llama-3.2-3B` 的 Stage I 导出不是近似导出，而是标准 HF 工件形态下的精确物化。
+
+### 5.2 Stage I remote validation
+
+结果文件：
+
+- `outputs/stage_i_llama/real_remote_validation.json`
+
+关键结果：
+
+- `avg_full_logits_max_abs_error = 0.0`
+- `avg_full_logits_mean_abs_error = 0.0`
+- `avg_last_token_logits_max_abs_error = 0.0`
+- `avg_last_token_logits_mean_abs_error = 0.0`
+- `greedy_first_token_match_rate = 1.0`
+- `generated_ids_exact_match_rate = 1.0`
+- `generated_text_exact_match_rate = 1.0`
+
+解释：
+
+> 真实 `Llama-3.2-3B` 上，Stage I（词表空间闭环）已经严格成立。
+
+### 5.3 Stage J remote validation
+
+结果文件：
+
+- `outputs/stage_j_llama/real_remote_validation.json`
+
+关键结果：
+
+- `avg_full_logits_max_abs_error ≈ 0.19385`
+- `avg_full_logits_mean_abs_error ≈ 0.01972`
+- `avg_last_token_logits_max_abs_error ≈ 0.14805`
+- `avg_last_token_logits_mean_abs_error ≈ 0.02167`
+- `greedy_first_token_match_rate = 1.0`
+- `generated_ids_exact_match_rate = 1.0`
+- `generated_text_exact_match_rate = 1.0`
+
+解释：
+
+> 真实 `Llama-3.2-3B` 上，Stage J（standard-shape full-layer）已经在 **generation correctness** 层面完全恢复；同时 logits 仍有小幅数值偏差，但不影响 greedy 和短生成结果。
+
+### 5.4 当前正式结论
+
+基于真实 3B 云端结果，现在可以正式给出结论：
+
+1. **Stage I：通过**
+   - 严格数值一致
+   - 导出工件正确
+   - generation 完全一致
+
+2. **Stage J：通过**
+   - full-layer 标准形状路线在真实 3B 上成立
+   - generation 完全一致
+   - logits 有可解释的小量级偏差，但不构成失败
+
+因此当前 `Llama-3.2-3B` 已经达到：
+
+> **可导出为混淆后的标准 HF 格式模型，并在真实 4090 服务器上完成 correctness 验证。**
+
+## 6. 当前边界
 
 本机阶段尚未完成的内容：
 
@@ -134,4 +225,8 @@ conda run --no-capture-output -n qwen-transformers python scripts/run_stage_j_ll
 - 未验证真实 28-layer / 3072 hidden / 8 KV heads 的数值行为
 - 未做 vLLM
 
-这些工作将移交到云端 4090 环境完成。
+上述前两项已在云端完成；当前仍未完成的是：
+
+- `vLLM` 路径
+- 更强噪声点下的稳定性评估
+- 安全/攻击评估

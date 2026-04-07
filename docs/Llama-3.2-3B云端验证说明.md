@@ -10,6 +10,63 @@
 2. 运行 obfuscated checkpoint
 3. 输出 correctness 对比结果
 
+## 1.1 两类核心工件的区别
+
+当前 `Llama-3.2-3B` 路线中，最关键的两类工件是：
+
+### `artifacts/stage_i_llama_real`
+
+这是 **Stage I 的真实 Llama 混淆工件**。
+
+它的语义是：
+
+- 只完成 **词表空间闭环**
+- 输入 token id 先映射到混淆词表空间
+- `embedding` 的词表行被重排/混淆
+- `lm_head` 的词表输出方向被重排/混淆
+- server 输出的 logits 还需要 client 侧恢复
+
+因此它是：
+
+> **最小可工作的标准 HF 混淆模型**
+
+适合：
+
+- 验证 client/server 输入输出契约
+- 验证标准 HF 导出是否正确
+- 作为 correctness baseline
+
+### `artifacts/stage_j_llama_real_full_square`
+
+这是 **Stage J 的真实 Llama standard-shape full-layer 工件**。
+
+它比 Stage I 多做了一大步：
+
+- 保留 Stage I 的词表空间闭环
+- 再把 full-layer hidden-space 也做标准形状适配
+- 包括：
+  - `input_layernorm`
+  - `post_attention_layernorm`
+  - `q_proj / k_proj / v_proj / o_proj`
+  - `gate_proj / up_proj / down_proj`
+  - `final norm`
+  - `lm_head`
+
+因此它是：
+
+> **完整 full-layer 的标准 HF 混淆模型**
+
+适合：
+
+- 真实 correctness 验证
+- 更接近最终交付的 server 工件
+- 后续继续做 Stage K release 包装
+
+一句话区分：
+
+- `stage_i_llama_real`：只混 `token-space`
+- `stage_j_llama_real_full_square`：混 `token-space + full hidden-space`
+
 ## 2. 先决条件
 
 云服务器应满足：
@@ -51,6 +108,59 @@
 - `scripts/run_stage_j_llama_real_noise_calibration.py`
 - `scripts/export_stage_k_llama_release.py`
 - `scripts/run_llama_3b_stagek_pipeline.sh`
+
+## 3.1 “标准 HF 混淆模型”和官网下载的 HF 模型有什么区别
+
+这两者在**文件格式**上非常像，但在**语义**上不一样。
+
+### 一样的地方
+
+混淆后的 server 工件仍然保持标准 Hugging Face 目录形态，例如：
+
+- `config.json`
+- `generation_config.json`
+- `tokenizer.json`
+- `tokenizer_config.json`
+- `model.safetensors`
+
+也就是说，它仍然可以被：
+
+- `AutoModelForCausalLM.from_pretrained(...)`
+
+直接加载。
+
+### 不一样的地方
+
+它不是“原始 HF 模型换了一份参数”那么简单，而是：
+
+> **可被标准 HF loader 加载的 obfuscated checkpoint**
+
+具体区别在于：
+
+1. **server 侧输入不是明文 token id**
+   - client 必须先做：
+     - `src/transforms.py::map_input_ids`
+
+2. **server 侧输出也不是明文词表语义**
+   - client 必须再做：
+     - `src/transforms.py::restore_logits`
+   - 或：
+     - `src/transforms.py::unmap_output_ids`
+
+3. **server 不能单独完成正常语义推理**
+   - server 持有：
+     - 混淆后的标准 HF checkpoint
+   - client 持有：
+     - `client_secret.pt`
+     - `perm_vocab / inv_perm_vocab`
+
+4. **某些内部参数关系可能和官方原模型不完全一致**
+   - 例如在 Stage J 路线中，可能会显式 untie `lm_head`
+   - 但这不影响它仍然是“标准 HF 可加载”的工件
+
+因此，给接手者最准确的解释是：
+
+> **它在目录格式和加载方式上像官方 HF 模型，但它不是明文模型；它必须配合 client 侧的输入映射与输出恢复一起使用。**
 
 ## 4. 云端推荐执行顺序
 
@@ -263,3 +373,13 @@ bash scripts/run_llama_3b_stagek_pipeline.sh
 因此这套脚本现在已经不是“准备好待验证”，而是：
 
 > **已经在真实 `Llama-3.2-3B` + 4090 环境上完成过一轮完整验证。**
+
+进一步地，当前已经完成：
+
+- `outputs/stage_j_llama/real_noise_calibration.json`
+- `outputs/stage_j_llama/real_tiny_a_remote_validation.json`
+- `artifacts/stage_k_llama_release/catalog.json`
+
+这意味着：
+
+> **Llama-3.2-3B 的真实噪声定标与 Stage K release 也已经在云端完成。**

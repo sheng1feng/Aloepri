@@ -79,12 +79,69 @@ conda run --no-capture-output -n qwen-transformers python scripts/export_stage_j
 
 当前已经完成的是：
 
-- 代码与脚本准备完毕
+- 真实 `Llama-3.2-3B` 噪声定标
+- `tiny_a` 真实工件导出
+- `tiny_a` 真实 correctness 验证
+- `artifacts/stage_k_llama_release/` 导出
 
-当前还未完成的是：
+对应关键结果：
 
-- 真实 4090 上运行这一轮噪声定标与 Stage K release 导出
+### 3.1 真实噪声定标结果
 
-因此当前最准确的表述是：
+结果文件：
 
-> **Llama-3.2-3B 已经具备继续推进到与 Qwen 交付层级一致所需的全部脚本与执行路径；剩余工作是把这些脚本在云端真实跑完。**
+- `outputs/stage_j_llama/real_noise_calibration.json`
+
+当前排序：
+
+- `stable_reference`
+- `tiny_a`
+- `tiny_b`
+- `small_a`
+- `small_c`
+- `small_b`
+- `paper_like`
+
+说明：
+
+- `stable_reference` 仍然是最稳的 correctness 基线
+- `tiny_a` 是当前最佳非零工作点
+- `paper_like` 在真实 `Llama-3.2-3B` 上明显过强，不适合作为默认部署点
+
+### 3.2 `tiny_a` 真实验证结果
+
+结果文件：
+
+- `outputs/stage_j_llama/real_tiny_a_remote_validation.json`
+
+关键结果：
+
+- `avg_full_logits_max_abs_error = 0.2578125`
+- `avg_last_token_logits_max_abs_error = 0.159375`
+- `greedy_first_token_match_rate = 1.0`
+- `generated_ids_exact_match_rate = 1.0`
+- `generated_text_exact_match_rate = 1.0`
+
+说明：
+
+> `tiny_a = (alpha_e=0.02, alpha_h=0.01)` 在真实 `Llama-3.2-3B` 上保持了完整的 generation correctness，因此可作为当前推荐非零工作点。
+
+### 3.3 Llama Stage K release
+
+结果文件：
+
+- `artifacts/stage_k_llama_release/catalog.json`
+
+当前已经包含两个 profile：
+
+- `stable_reference`
+- `tiny_a`
+
+其中：
+
+- `recommended_profile = "tiny_a"`
+- `stable_reference_profile = "stable_reference"`
+
+因此当前可以正式给出结论：
+
+> **Llama-3.2-3B 已经完成噪声定标与 Stage K release 包装，在交付层级上已经与 Qwen 基本对齐。**
