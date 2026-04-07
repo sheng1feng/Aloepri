@@ -44,6 +44,10 @@
 - `scripts/export_stage_i_llama_mock_checkpoint.py`
 - `scripts/export_stage_j_llama_full_checkpoint.py`
 - `scripts/run_llama_remote_validation.py`
+- `scripts/export_stage_i_llama_real_checkpoint.py`
+- `scripts/export_stage_j_llama_real_checkpoint.py`
+- `scripts/run_llama_baseline_smoke.py`
+- `scripts/run_llama_3b_server_pipeline.sh`
 
 ## 4. 云端推荐执行顺序
 
@@ -115,47 +119,44 @@ conda env update -f environment.qwen-transformers.yml --prune
 先在云上验证 baseline：
 
 ```bash
-conda run --no-capture-output -n qwen-transformers python - <<'PY'
-from transformers import AutoTokenizer, AutoModelForCausalLM
-model_dir = "/data/models/Llama-3.2-3B"
-tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
-model = AutoModelForCausalLM.from_pretrained(model_dir, trust_remote_code=True, torch_dtype="auto").eval().cuda()
-prompt = "请用一句话介绍你自己。"
-text = tokenizer.apply_chat_template(
-    [{"role":"user","content":prompt}],
-    tokenize=False,
-    add_generation_prompt=True,
-)
-inputs = tokenizer(text, return_tensors="pt").to("cuda")
-output = model.generate(**inputs, max_new_tokens=8, do_sample=False)
-print(tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
-PY
+conda run --no-capture-output -n qwen-transformers python scripts/run_llama_baseline_smoke.py \
+  --model-dir /home/nss-d/dcy/codes/ModelSplit/models/Llama-3.2-3B \
+  --device cuda \
+  --dtype bfloat16
 ```
 
 ### 4.2 导出真实 Llama 的 obfuscated 工件
 
-先导出 Stage I：
+先导出 Stage I（真实 3B baseline）：
 
 ```bash
-conda run --no-capture-output -n qwen-transformers python scripts/export_stage_i_llama_mock_checkpoint.py
+conda run --no-capture-output -n qwen-transformers python scripts/export_stage_i_llama_real_checkpoint.py \
+  --model-dir /home/nss-d/dcy/codes/ModelSplit/models/Llama-3.2-3B \
+  --export-dir artifacts/stage_i_llama_real \
+  --dtype bfloat16 \
+  --device cpu
 ```
 
 说明：
 
-- 这一步当前脚本使用的是“本地 Llama 元数据 + mock baseline”的写法
-- 上云后，下一步建议优先把它改成**直接加载真实 `/data/models/Llama-3.2-3B/` baseline** 再导出
-- 如果你要做真实 3B correctness，这一步最终应替换成真实模型导出，而不是 mock 导出
+- 这一步会直接加载真实 `Llama-3.2-3B` baseline 再导出
+- 导出的模型保存在仓库目录下：
+  - `artifacts/stage_i_llama_real/`
 
 再导出 Stage J：
 
 ```bash
-conda run --no-capture-output -n qwen-transformers python scripts/export_stage_j_llama_full_checkpoint.py
+conda run --no-capture-output -n qwen-transformers python scripts/export_stage_j_llama_real_checkpoint.py \
+  --model-dir /home/nss-d/dcy/codes/ModelSplit/models/Llama-3.2-3B \
+  --export-dir artifacts/stage_j_llama_real_full_square \
+  --dtype bfloat16 \
+  --device cpu
 ```
 
 同样说明：
 
-- 当前本机代码已经把导出路径、artifact schema、client secret 结构准备好了
-- 到云端后，应基于真实 `Llama-3.2-3B` baseline 做正式导出
+- 导出的模型保存在仓库目录下：
+  - `artifacts/stage_j_llama_real_full_square/`
 
 ### 4.3 correctness 回归
 
@@ -163,7 +164,7 @@ conda run --no-capture-output -n qwen-transformers python scripts/export_stage_j
 
 ```bash
 conda run --no-capture-output -n qwen-transformers python scripts/run_llama_remote_validation.py \
-  --baseline-model-dir /data/models/Llama-3.2-3B \
+  --baseline-model-dir /home/nss-d/dcy/codes/ModelSplit/models/Llama-3.2-3B \
   --server-dir <obfuscated_server_dir> \
   --client-secret <client_secret.pt> \
   --device cuda \
@@ -181,6 +182,25 @@ conda run --no-capture-output -n qwen-transformers python scripts/run_llama_remo
 
 - `server-dir` 指向 Stage J full-layer 导出目录
 - 再确认 standard-shape full-layer 的 correctness
+
+### 4.4 一键执行
+
+如果你希望按默认路径一次性跑完 baseline、Stage I、Stage J，可以直接执行：
+
+```bash
+bash scripts/run_llama_3b_server_pipeline.sh
+```
+
+这个脚本默认使用：
+
+- 仓库目录：`/home/nss-d/sf/Aloepri`
+- 模型目录：`/home/nss-d/dcy/codes/ModelSplit/models/Llama-3.2-3B`
+
+如果路径有变化，可以用环境变量覆盖：
+
+```bash
+REPO_DIR=/your/repo MODEL_DIR=/your/model/path bash scripts/run_llama_3b_server_pipeline.sh
+```
 
 ## 5. 当前结论
 
