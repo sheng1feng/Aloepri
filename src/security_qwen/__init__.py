@@ -25,9 +25,37 @@ from src.security_qwen.vma import (
     infer_vma_default_projection_layers,
     run_vma_baseline,
 )
+from src.security_qwen.tfma import (
+    FrequencyAttackConfig,
+    build_frequency_corpora,
+    build_tfma_comparison_payload,
+    build_tfma_template,
+    default_frequency_gate4_targets,
+    run_tfma_baseline,
+)
+from src.security_qwen.sda import (
+    SDABaselineConfig,
+    build_sda_comparison_payload,
+    build_sda_template,
+    run_sda_baseline,
+)
 from src.security_qwen.ia import build_ia_template
-from src.security_qwen.ima import build_ima_template
-from src.security_qwen.isa import build_isa_template
+from src.security_qwen.ima import (
+    IMABaselineConfig,
+    build_ima_comparison_payload,
+    build_ima_template,
+    default_ima_gate2_targets,
+    load_ima_embedding_sources,
+    run_ima_baseline,
+)
+from src.security_qwen.isa import (
+    ISABaselineConfig,
+    build_isa_comparison_payload,
+    build_isa_template,
+    default_isa_gate3_targets,
+    load_isa_model_bundle,
+    run_isa_baseline,
+)
 from src.security_qwen.tfma import build_tfma_template
 from src.security_qwen.sda import build_sda_template
 
@@ -54,8 +82,28 @@ __all__ = [
     "infer_vma_default_projection_layers",
     "run_vma_baseline",
     "build_ia_template",
+    "IMABaselineConfig",
     "build_ima_template",
+    "build_ima_comparison_payload",
+    "default_ima_gate2_targets",
+    "load_ima_embedding_sources",
+    "run_ima_baseline",
+    "ISABaselineConfig",
+    "build_isa_comparison_payload",
     "build_isa_template",
+    "default_isa_gate3_targets",
+    "load_isa_model_bundle",
+    "run_isa_baseline",
+    "FrequencyAttackConfig",
+    "build_frequency_corpora",
+    "build_tfma_comparison_payload",
+    "build_tfma_template",
+    "default_frequency_gate4_targets",
+    "run_tfma_baseline",
+    "SDABaselineConfig",
+    "build_sda_comparison_payload",
+    "build_sda_template",
+    "run_sda_baseline",
     "build_tfma_template",
     "build_sda_template",
 ]
