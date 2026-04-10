@@ -39,6 +39,13 @@ from src.security_qwen.sda import (
     build_sda_template,
     run_sda_baseline,
 )
+from src.security_qwen.gate6_enhancement import (
+    GATE6_SENSITIVE_TERMS,
+    Gate6Case,
+    default_gate6_cases,
+    ensure_gate6_artifact,
+    security_sensitive_plain_ids,
+)
 from src.security_qwen.ia import build_ia_template
 from src.security_qwen.ima import (
     IMABaselineConfig,
@@ -104,6 +111,11 @@ __all__ = [
     "build_sda_comparison_payload",
     "build_sda_template",
     "run_sda_baseline",
+    "GATE6_SENSITIVE_TERMS",
+    "Gate6Case",
+    "default_gate6_cases",
+    "ensure_gate6_artifact",
+    "security_sensitive_plain_ids",
     "build_tfma_template",
     "build_sda_template",
 ]

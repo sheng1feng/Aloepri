@@ -283,11 +283,13 @@ def _sample_eval_and_candidate_sets(
     eval_size: int,
     candidate_pool_size: int,
     seed: int,
+    sensitive_plain_ids_override: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     movable_plain_ids = ordinary_token_ids(tokenizer)
     movable_plain_set = set(int(item) for item in movable_plain_ids.tolist())
+    sensitive_source = sensitive_plain_ids_override if sensitive_plain_ids_override is not None else _collect_sensitive_plain_ids(tokenizer)
     sensitive_plain_ids = torch.tensor(
-        [item for item in _collect_sensitive_plain_ids(tokenizer).tolist() if item in movable_plain_set],
+        [item for item in torch.as_tensor(sensitive_source, dtype=torch.long).tolist() if item in movable_plain_set],
         dtype=torch.long,
     )
     sensitive_obfuscated_ids = perm_vocab[sensitive_plain_ids] if sensitive_plain_ids.numel() > 0 else torch.empty(0, dtype=torch.long)
@@ -363,6 +365,7 @@ def run_vma_baseline(
     use_projection_sources: bool = True,
     include_direct_sources: bool = True,
     projection_kinds: tuple[str, ...] | None = None,
+    sensitive_plain_ids_override: torch.Tensor | None = None,
 ) -> dict[str, Any]:
     baseline_weights, observed_weights, baseline_projection_weights, observed_projection_weights, aux = load_vma_weight_sources(
         target_name=target_name,
@@ -379,6 +382,7 @@ def run_vma_baseline(
         eval_size=eval_size,
         candidate_pool_size=candidate_pool_size,
         seed=seed,
+        sensitive_plain_ids_override=sensitive_plain_ids_override,
     )
     true_plain_ids = inv_perm_vocab[eval_obfuscated_ids]
 
