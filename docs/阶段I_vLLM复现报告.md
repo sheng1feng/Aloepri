@@ -1,5 +1,7 @@
 # 阶段 I：vLLM 接入复现报告
 
+> Legacy note: 本文档对应的是 **旧版 Stage I**，其重点是 `Stage A` 标准 HF/vLLM 入口打通与 feasibility probe。新版 `Stage I` 的 canonical 定义见 `docs/阶段I_部署约束验证报告.md`。
+
 本文档记录阶段 I 的实际实现、回归结果与当前边界。阶段 I 采用 `docs/阶段I_vLLM接入计划.md` 的主线定义，并按“**先做 Stage A 可部署化，不做模块化抽象**”执行。
 
 ---

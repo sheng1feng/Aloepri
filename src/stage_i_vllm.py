@@ -9,6 +9,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 from src.key_manager import validate_permutation
 from src.model_loader import resolve_torch_dtype
+from src.stage_h import build_stage_h_deployable_inventory
 
 
 def _normalize_saved_tokenizer_config(server_dir: Path) -> None:
@@ -203,4 +204,29 @@ def build_phase2_feasibility_summary() -> dict[str, Any]:
                 "rationale": "Metric-matrix style fused norm changes standard RMSNorm kernel semantics and would need rollback or custom kernel support.",
             },
         ],
+        "redesigned_stage_i": build_stage_i_deployability_matrix(),
+    }
+
+
+def build_stage_i_deployability_matrix() -> dict[str, Any]:
+    inventory = build_stage_h_deployable_inventory()
+    return {
+        "stage": "I",
+        "source_stage": "H",
+        "inventory_goal": inventory["goal"],
+        "runtime_boundary": {
+            "standard_transformer_graph": True,
+            "custom_online_operator_required": False,
+            "compatible_target_surfaces": ["transformers", "vllm", "sglang"],
+        },
+        "validated_components": {
+            "embedding_head": "standard_weight_rewrite",
+            "attention_diversity": "needs_materialization_check",
+            "ffn_component_transform": "needs_materialization_check",
+            "norm_kappa_correction": "supported_if_fused_offline",
+        },
+        "legacy_reference": {
+            "legacy_stage_i_scope": "stage_a_standard_entry_and_phase2_probe",
+            "legacy_report": "docs/阶段I_vLLM复现报告.md",
+        },
     }
