@@ -51,3 +51,23 @@
 所以当前更准确的说法是：
 
 > 新版 `Stage J` 已经完成“部署线物化”的第一步，但尚未完成“标准权重可见性证明”的最后一步。 
+
+## 5. 双轨状态
+
+当前 `Stage J` 已明确拆成两条线：
+
+### 5.1 buffered redesign line
+
+- `artifacts/stage_j_qwen_redesign`
+- 更贴近当前 redesign 表达
+- 当前在 `VMA / ISA hidden_state` 上已经明显优于旧 conservative line
+
+### 5.2 standard-visible bridge line
+
+- `artifacts/stage_j_qwen_redesign_standard`
+- 当前先用标准键可见源工件建立桥接出口
+- 明确不宣称已与 buffered redesign line 等价
+
+这意味着：
+
+> 当前 `Stage J` 的完善方向不再是只做单条线，而是先让“高保真 redesign”与“标准键可见导出”两条线都存在，并把它们的差距写清楚。 

@@ -1,0 +1,40 @@
+# 阶段 J：标准可见桥接导出报告
+
+## 1. 为什么要有这条线
+
+当前 redesigned `Stage J` 有两类目标：
+
+- buffered redesign line
+  - 更接近论文允许保留的复杂表达
+  - 已经在 `VMA / ISA hidden_state` 上明显优于旧 conservative line
+- standard-visible line
+  - 需要真正提供标准 `model.* / lm_head.*` 键布局
+
+由于这两者当前还没有完全合流，所以本轮新增一条明确的桥接线：
+
+- `artifacts/stage_j_qwen_redesign_standard`
+
+## 2. 当前桥接线的真实定位
+
+当前这条桥接线：
+
+- 使用标准权重可见源工件作为 source
+- 明确标记为 `standard_visible_bridge`
+- 明确标记：
+  - `equivalence_to_buffered_redesign = false`
+
+所以它不是“已经把 redesign 线标准化成功”的结论，而是：
+
+> 先把标准键可见导出这条工程通路单独立起来，同时诚实保留与 buffered redesign 线之间尚未证明的差距。
+
+## 3. 当前产物
+
+- `artifacts/stage_j_qwen_redesign_standard/manifest.json`
+- `manifest.standard_weight_proof`
+
+## 4. 下一步
+
+后续如果要把两条线真正合流，目标应是：
+
+1. 把 buffered redesign line 中已经证明有效的表达，继续 materialize 到标准键布局中
+2. 最终删除 `equivalence_to_buffered_redesign = false` 这类桥接说明
