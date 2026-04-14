@@ -1,5 +1,7 @@
 # 阶段 J：标准形状前缀恢复报告
 
+> Legacy note: 本文档对应的是 **旧版 Stage J**，其重点是 conservative standard-shape / square-monomial prefix 与 full-layer 恢复。新版 `Stage J` 的 canonical 定义见 `docs/阶段J_Qwen全模型部署物化报告.md`。
+
 本文档记录阶段 J 第一轮实现结果。
 
 本轮目标不是部署，也不是 vLLM，而是回答：
