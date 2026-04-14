@@ -6,6 +6,7 @@ __pycache__/
 # Local scratch / temp
 .tmp_pdf_pages/
 .tmp*/
+.worktrees/
 *.log
 
 # Large local artifacts and generated outputs
