@@ -34,6 +34,7 @@ def build_redesigned_expression_audit() -> dict[str, Any]:
         "bootstraps_from_stage_h_pretrained": stage_j_manifest.get("bootstrap_source") == "artifacts/stage_h_pretrained",
         "source_stages": stage_j_manifest.get("source_stages", []),
         "has_component_level_expression_manifest": "component_expression" in stage_j_manifest,
+        "has_standard_weight_key_layout": False,
         "server_dir_present": Path("artifacts/stage_j_qwen_redesign/server").exists(),
         "client_dir_present": Path("artifacts/stage_j_qwen_redesign/client").exists(),
     }
@@ -47,15 +48,16 @@ def build_redesigned_expression_audit() -> dict[str, Any]:
 
     verdict = {
         "expression_enters_bootstrap_source": stage_h_source["attention_profile_present"] and stage_h_source["keymat_parameters_present"],
-        "expression_is_proven_in_stage_j_export": stage_j["has_component_level_expression_manifest"],
+        "expression_manifest_exists_in_stage_j_export": stage_j["has_component_level_expression_manifest"],
+        "expression_is_proven_in_stage_j_export": stage_j["has_component_level_expression_manifest"] and stage_j["has_standard_weight_key_layout"],
         "expression_is_carried_into_stage_k_release": stage_k["has_expression_metadata_in_catalog"],
     }
 
     summary = {
-        "status": "bootstrap_expression_present_but_not_yet_proven_in_stage_j_manifest"
+        "status": "bootstrap_expression_present_manifest_added_but_standard_weight_proof_still_missing"
         if verdict["expression_enters_bootstrap_source"] and not verdict["expression_is_proven_in_stage_j_export"]
         else "expression_audit_inconclusive",
-        "next_action": "materialize_component_level_expression_metadata_and_then_re-run_vma",
+        "next_action": "materialize_standard_weight_visible_expression_proof_and_then_re-run_vma",
     }
 
     return {

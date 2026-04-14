@@ -77,6 +77,11 @@ def _load_standard_embedding(server_dir: str) -> torch.Tensor:
     return state["model.embed_tokens.weight"].to(torch.float32)
 
 
+def _load_buffered_stage_embedding(server_dir: str) -> torch.Tensor:
+    state = load_file(str(Path(server_dir) / "model.safetensors"))
+    return state["buffer::stage_a_model.model.embed_tokens.weight"].to(torch.float32)
+
+
 def _load_stage_h_embedding(resolved_root_dir: str) -> torch.Tensor:
     payload = torch.load(Path(resolved_root_dir) / "server_model_state.pt", map_location="cpu")
     buffers = payload.get("buffer_state", {})
@@ -97,7 +102,11 @@ def load_ima_embedding_sources(
     else:
         if resolved.server_dir is None:
             raise FileNotFoundError(f"Target {target_name} has no server_dir")
-        observed_embed = _load_standard_embedding(resolved.server_dir)
+        state = load_file(str(Path(resolved.server_dir) / "model.safetensors"))
+        if "buffer::stage_a_model.model.embed_tokens.weight" in state:
+            observed_embed = state["buffer::stage_a_model.model.embed_tokens.weight"].to(torch.float32)
+        else:
+            observed_embed = state["model.embed_tokens.weight"].to(torch.float32)
 
     if resolved.client_secret_path is None:
         raise FileNotFoundError(f"Target {target_name} has no client_secret_path")

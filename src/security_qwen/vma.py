@@ -100,8 +100,37 @@ def _load_standard_server_weights(server_dir: str) -> dict[str, torch.Tensor]:
     return weights
 
 
+def _is_buffered_stage_state(state: dict[str, torch.Tensor]) -> bool:
+    return "buffer::stage_a_model.model.embed_tokens.weight" in state
+
+
+def _load_buffered_stage_server_weights(server_dir: str) -> dict[str, torch.Tensor]:
+    state = load_file(str(Path(server_dir) / "model.safetensors"))
+    weights: dict[str, torch.Tensor] = {}
+    if "buffer::stage_a_model.model.embed_tokens.weight" in state:
+        weights["embed"] = state["buffer::stage_a_model.model.embed_tokens.weight"].to(torch.float32)
+    if "buffer::stage_a_model.lm_head.weight" in state:
+        weights["head"] = state["buffer::stage_a_model.lm_head.weight"].to(torch.float32)
+    if "head" not in weights and "embed" in weights:
+        weights["head"] = weights["embed"]
+    return weights
+
+
 def _infer_layer_indices_from_standard_state(state: dict[str, torch.Tensor]) -> list[int]:
     pattern = re.compile(r"^model\.layers\.(\d+)\.")
+    indices = sorted(
+        {
+            int(match.group(1))
+            for key in state.keys()
+            for match in [pattern.match(key)]
+            if match is not None
+        }
+    )
+    return indices
+
+
+def _infer_layer_indices_from_buffered_stage_state(state: dict[str, torch.Tensor]) -> list[int]:
+    pattern = re.compile(r"^buffer::stage_a_model\.model\.layers\.(\d+)\.")
     indices = sorted(
         {
             int(match.group(1))
@@ -148,7 +177,10 @@ def infer_vma_default_projection_layers(
         if resolved.server_dir is None:
             return baseline_layers
         observed_state = load_file(str(Path(resolved.server_dir) / "model.safetensors"))
-        observed_layers = _default_layer_indices(_infer_layer_indices_from_standard_state(observed_state))
+        if _is_buffered_stage_state(observed_state):
+            observed_layers = _default_layer_indices(_infer_layer_indices_from_buffered_stage_state(observed_state))
+        else:
+            observed_layers = _default_layer_indices(_infer_layer_indices_from_standard_state(observed_state))
     return sorted(set(baseline_layers) & set(observed_layers))
 
 
@@ -167,6 +199,26 @@ def _load_standard_projection_weights(
     for layer_idx in layer_indices:
         for short_name, suffix in mapping.items():
             key = f"model.layers.{layer_idx}.{suffix}"
+            if key in state:
+                projections[f"layer_{layer_idx}_{short_name}"] = state[key].to(torch.float32)
+    return projections
+
+
+def _load_buffered_stage_projection_weights(
+    state: dict[str, torch.Tensor],
+    layer_indices: list[int],
+) -> dict[str, torch.Tensor]:
+    projections: dict[str, torch.Tensor] = {}
+    mapping = {
+        "q": "self_attn.q_weight",
+        "k": "self_attn.k_weight",
+        "v": "self_attn.v_weight",
+        "gate": "mlp.gate_weight",
+        "up": "mlp.up_weight",
+    }
+    for layer_idx in layer_indices:
+        for short_name, suffix in mapping.items():
+            key = f"buffer::stage_a_model.model.layers.{layer_idx}.{suffix}"
             if key in state:
                 projections[f"layer_{layer_idx}_{short_name}"] = state[key].to(torch.float32)
     return projections
@@ -216,10 +268,15 @@ def load_vma_weight_sources(
     else:
         if resolved.server_dir is None:
             raise FileNotFoundError(f"Target {target_name} has no server_dir: {resolved}")
-        observed_weights = _load_standard_server_weights(resolved.server_dir)
         observed_state = load_file(str(Path(resolved.server_dir) / "model.safetensors"))
-        observed_layer_indices = _default_layer_indices(_infer_layer_indices_from_standard_state(observed_state))
-        observed_projection_weights = _load_standard_projection_weights(observed_state, observed_layer_indices)
+        if _is_buffered_stage_state(observed_state):
+            observed_weights = _load_buffered_stage_server_weights(resolved.server_dir)
+            observed_layer_indices = _default_layer_indices(_infer_layer_indices_from_buffered_stage_state(observed_state))
+            observed_projection_weights = _load_buffered_stage_projection_weights(observed_state, observed_layer_indices)
+        else:
+            observed_weights = _load_standard_server_weights(resolved.server_dir)
+            observed_layer_indices = _default_layer_indices(_infer_layer_indices_from_standard_state(observed_state))
+            observed_projection_weights = _load_standard_projection_weights(observed_state, observed_layer_indices)
 
     if "embed" not in observed_weights:
         raise KeyError(f"Target {target_name} does not expose an embeddable weight source")

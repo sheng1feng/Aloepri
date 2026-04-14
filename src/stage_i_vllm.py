@@ -240,9 +240,8 @@ def build_stage_i_boundary_audit() -> dict[str, Any]:
         "runtime_graph_is_standard": True,
         "custom_online_operator_required": False,
         "compatible_target_surfaces": ["transformers", "vllm", "sglang"],
-        "exported_artifact_proves_attention_expression": bool(
-            expression_audit["stage_j"]["has_component_level_expression_manifest"]
-        ),
+        "exported_artifact_has_attention_manifest": bool(expression_audit["stage_j"]["has_component_level_expression_manifest"]),
+        "exported_artifact_proves_attention_expression": bool(expression_audit["stage_j"]["has_standard_weight_key_layout"]),
         "exported_artifact_proves_ffn_expression": False,
         "exported_artifact_proves_norm_expression": False,
         "release_catalog_carries_redesign_lineage": bool(

@@ -19,6 +19,10 @@ def test_export_stage_j_redesign_checkpoint_writes_manifest_and_links(tmp_path: 
     (source_dir / "server").mkdir(parents=True)
     (source_dir / "client").mkdir(parents=True)
     (source_dir / "server" / "config.json").write_text("{}", encoding="utf-8")
+    (source_dir / "server" / "obfuscation_config.json").write_text(
+        '{"attention_profile":"rqk_hqk_block_taukv_taugroup","lambda":0.3,"h":128,"alpha_e":0.1,"alpha_h":0.05}',
+        encoding="utf-8",
+    )
     (source_dir / "client" / "client_secret.pt").write_text("secret", encoding="utf-8")
 
     export_dir = tmp_path / "stage_j_qwen_redesign"
@@ -28,3 +32,5 @@ def test_export_stage_j_redesign_checkpoint_writes_manifest_and_links(tmp_path: 
     assert (export_dir / "server").exists()
     assert (export_dir / "client").exists()
     assert result["server_dir"].name == "server"
+    manifest = Path(export_dir / "manifest.json").read_text(encoding="utf-8")
+    assert "component_expression" in manifest

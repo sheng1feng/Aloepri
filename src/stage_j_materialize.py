@@ -17,6 +17,34 @@ def build_stage_j_redesign_manifest() -> dict[str, Any]:
     }
 
 
+def _build_component_expression(source_dir: Path) -> dict[str, Any]:
+    config_path = source_dir / "server" / "obfuscation_config.json"
+    payload: dict[str, Any] = {}
+    if config_path.exists():
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    return {
+        "embedding_head": {
+            "noise_terms_present": all(key in payload for key in ["alpha_e", "alpha_h"]),
+            "alpha_e": payload.get("alpha_e"),
+            "alpha_h": payload.get("alpha_h"),
+        },
+        "attention": {
+            "attention_profile": payload.get("attention_profile"),
+            "profile_present": bool(payload.get("attention_profile")),
+        },
+        "keymat": {
+            "present": all(key in payload for key in ["lambda", "h"]),
+            "lambda": payload.get("lambda"),
+            "h": payload.get("h"),
+        },
+        "norm_ffn": {
+            "beta": payload.get("beta"),
+            "gamma": payload.get("gamma"),
+            "adapted_layers_count": len(payload.get("adapted_layers", [])),
+        },
+    }
+
+
 def _ensure_link_or_copy(source_dir: Path, target_dir: Path, *, materialize: bool) -> None:
     if target_dir.exists() or target_dir.is_symlink():
         if target_dir.is_symlink() or target_dir.is_file():
@@ -56,6 +84,7 @@ def export_stage_j_redesign_checkpoint(
     manifest["resolved_bootstrap_source"] = str(source_dir)
     manifest["server_dir"] = "server"
     manifest["client_dir"] = "client"
+    manifest["component_expression"] = _build_component_expression(source_dir)
     (export_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {

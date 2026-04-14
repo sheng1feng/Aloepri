@@ -21,6 +21,7 @@ from src.security_qwen.ima import (
 from src.security_qwen.metrics import classify_risk_level
 from src.security_qwen.schema import SecurityEvalTarget, build_security_eval_payload
 from src.stage_h_artifact import load_stage_h_artifact
+from src.stage_h_pretrained import load_stage_h_pretrained
 
 
 @dataclass(frozen=True)
@@ -251,8 +252,21 @@ def load_isa_model_bundle(
     resolved = aux["resolved_target"]
     perm_vocab = aux["perm_vocab"]
 
+    manifest = {}
+    manifest_path = resolved.get("manifest_path")
+    if manifest_path is not None and Path(manifest_path).exists():
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+
     if resolved["stage"] == "H":
         bundle = load_stage_h_artifact(resolved["resolved_root_dir"])
+        model = bundle["stage_model"].eval()
+        tokenizer = bundle["tokenizer"]
+        extractor = _get_stage_h_observable
+    elif manifest.get("bootstrap_source") == "artifacts/stage_h_pretrained":
+        server_dir = resolved["server_dir"]
+        if server_dir is None:
+            raise FileNotFoundError(f"Target {target_name} has no server_dir")
+        bundle = load_stage_h_pretrained(server_dir)
         model = bundle["stage_model"].eval()
         tokenizer = bundle["tokenizer"]
         extractor = _get_stage_h_observable
