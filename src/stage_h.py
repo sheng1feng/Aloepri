@@ -28,6 +28,45 @@ class LayerStageHConfig:
     alpha_h: float = 0.0
 
 
+def build_stage_h_deployable_inventory() -> dict[str, object]:
+    return {
+        "stage": "H",
+        "goal": "deployable_obfuscation_expression_reconstruction",
+        "runtime_boundary": {
+            "standard_transformer_graph": True,
+            "custom_online_operator_required": False,
+            "offline_parameter_rewrite_preferred": True,
+        },
+        "embedding_head": {
+            "preserve_token_permutation": True,
+            "preserve_key_matrix_side_transform": True,
+            "preserve_noise_terms": True,
+            "current_builder": "build_keymat_embed_head_artifacts",
+        },
+        "attention": {
+            "preserve_block_permutation": True,
+            "preserve_head_or_group_diversity": True,
+            "preserve_rope_side_rotation_and_scaling": True,
+            "current_builder": "build_staticized_attention",
+            "current_profile_default": "rqk_hqk_block_taukv_taugroup",
+        },
+        "ffn": {
+            "preserve_component_specific_transform": True,
+            "preserve_per_layer_diversity": True,
+            "current_builder": "build_keymat_fused_ffn",
+        },
+        "norm": {
+            "preserve_kappa_correction": True,
+            "prefer_offline_fusion": True,
+            "current_builder": "build_keymat_fused_rmsnorm",
+        },
+        "migration": {
+            "legacy_stage_h_scope": "attention_staticization_and_noise_calibration",
+            "legacy_report": "docs/阶段H-Attention静态化与噪声定标报告.md",
+        },
+    }
+
+
 def build_layer_stage_h_configs(
     layer_configs_f: dict[int, LayerStageFConfig],
 ) -> dict[int, LayerStageHConfig]:

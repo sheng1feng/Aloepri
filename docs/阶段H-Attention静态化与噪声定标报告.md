@@ -1,5 +1,7 @@
 # 阶段 H：Attention 静态化收敛与噪声强度定标报告
 
+> Legacy note: 本文档对应的是 **旧版 Stage H**，其重点是 attention 静态化收敛与噪声强度定标。新版 `Stage H` 的 canonical 定义见 `docs/阶段H_Qwen可部署混淆表达重构报告.md`。
+
 ## 1. 阶段 H 的范围
 
 阶段 H 按约束只做两件事：
