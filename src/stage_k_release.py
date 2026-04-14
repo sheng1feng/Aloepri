@@ -20,17 +20,17 @@ def default_stage_k_profiles() -> list[StageKProfile]:
     return [
         StageKProfile(
             name="stable_reference",
-            source_dir="artifacts/stage_j_full_square",
-            description="Zero-noise standard-shape full-layer checkpoint with near-exact correctness.",
-            recommended_use="Regression baseline, correctness debugging, deterministic demos.",
-            regression_file="outputs/stage_j/full_layers_square_export_regression.json",
+            source_dir="artifacts/stage_j_qwen_redesign",
+            description="Bootstrap redesigned Stage-J Qwen artifact used as the stable reference release profile.",
+            recommended_use="Redesigned-line baseline, packaging verification, lineage debugging.",
+            regression_file="outputs/stage_j/redesign_regression.json",
         ),
         StageKProfile(
             name="tiny_a",
-            source_dir="artifacts/stage_j_full_square_tiny_a",
-            description="Recommended non-zero noise standard-shape full-layer checkpoint.",
-            recommended_use="Default delivery profile when non-zero obfuscation noise is required.",
-            regression_file="outputs/stage_j/full_layers_square_tiny_a_export_regression.json",
+            source_dir="artifacts/stage_j_qwen_redesign",
+            description="Default release alias for the redesigned Qwen deployment line.",
+            recommended_use="Default delivery entry for the redesigned line until differentiated redesign profiles are added.",
+            regression_file="outputs/stage_j/redesign_regression.json",
         ),
     ]
 
@@ -43,6 +43,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _profile_summary(profile: StageKProfile, source_dir: Path) -> dict[str, Any]:
     metadata = _load_json(source_dir / "stage_i_metadata.json")
+    manifest = _load_json(source_dir / "manifest.json")
     regression = {}
     if profile.regression_file is not None:
         candidate = Path(profile.regression_file)
@@ -56,6 +57,7 @@ def _profile_summary(profile: StageKProfile, source_dir: Path) -> dict[str, Any]
         "server_dir": f"profiles/{profile.name}/server",
         "client_secret": f"profiles/{profile.name}/client/client_secret.pt",
         "metadata": metadata,
+        "manifest": manifest,
         "regression_summary": regression.get("summary", {}),
     }
 
@@ -79,7 +81,7 @@ def export_stage_k_release(
     materialize: bool = False,
     recommended_profile: str = "tiny_a",
     stable_reference_profile: str = "stable_reference",
-    title: str = "Stage-K Standard-Shape Release",
+    title: str = "Stage-K Redesigned Qwen Release",
 ) -> dict[str, Any]:
     export_dir = Path(export_dir)
     profiles_dir = export_dir / "profiles"
@@ -97,6 +99,7 @@ def export_stage_k_release(
 
     catalog = {
         "format": "stage_k_release_v1",
+        "stage_lineage": "redesigned_qwen_stage_j",
         "materialized": bool(materialize),
         "profiles_dir": "profiles",
         "profiles": profile_summaries,
@@ -120,7 +123,7 @@ def export_stage_k_release(
     readme = [
         f"# {title}",
         "",
-        "This bundle collects the validated standard-shape full-layer checkpoints.",
+        "This bundle collects the redesigned Qwen deployment-line artifacts.",
         "",
         "Profiles:",
     ]

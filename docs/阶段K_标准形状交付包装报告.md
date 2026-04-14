@@ -1,5 +1,7 @@
 # 阶段 K：标准形状交付包装报告
 
+> Legacy note: 本文档对应的是 **旧版 Stage K**，其重点是对 conservative standard-shape `Stage J` 工件做 release 包装。新版 `Stage K` 的 canonical 定义见 `docs/阶段K_Qwen交付包装报告.md`。
+
 本文档记录阶段 K 的第一轮推进结果。
 
 阶段 K 的目标不是再改模型数学，而是把已经验证通过的 **standard-shape full-layer** 工件，整理成一个更适合交付、演示和后续服务化接入的发布目录。
