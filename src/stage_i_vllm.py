@@ -10,6 +10,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 from src.key_manager import validate_permutation
 from src.model_loader import resolve_torch_dtype
 from src.stage_h import build_stage_h_deployable_inventory
+from src.stage_hk_audit import build_redesigned_expression_audit
 
 
 def _normalize_saved_tokenizer_config(server_dir: Path) -> None:
@@ -205,6 +206,7 @@ def build_phase2_feasibility_summary() -> dict[str, Any]:
             },
         ],
         "redesigned_stage_i": build_stage_i_deployability_matrix(),
+        "redesigned_boundary_audit": build_stage_i_boundary_audit(),
     }
 
 
@@ -229,4 +231,21 @@ def build_stage_i_deployability_matrix() -> dict[str, Any]:
             "legacy_stage_i_scope": "stage_a_standard_entry_and_phase2_probe",
             "legacy_report": "docs/阶段I_vLLM复现报告.md",
         },
+    }
+
+
+def build_stage_i_boundary_audit() -> dict[str, Any]:
+    expression_audit = build_redesigned_expression_audit()
+    return {
+        "runtime_graph_is_standard": True,
+        "custom_online_operator_required": False,
+        "compatible_target_surfaces": ["transformers", "vllm", "sglang"],
+        "exported_artifact_proves_attention_expression": bool(
+            expression_audit["stage_j"]["has_component_level_expression_manifest"]
+        ),
+        "exported_artifact_proves_ffn_expression": False,
+        "exported_artifact_proves_norm_expression": False,
+        "release_catalog_carries_redesign_lineage": bool(
+            expression_audit["stage_k"]["points_to_redesigned_stage_j"]
+        ),
     }
