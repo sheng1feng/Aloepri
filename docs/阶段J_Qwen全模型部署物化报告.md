@@ -26,3 +26,28 @@
 - `artifacts/stage_j_full_square_tiny_a`
 
 但它对应的是 conservative standard-shape line，而不是新版 `Stage J` 的唯一目标定义。
+
+## 4. 标准权重证明
+
+当前新版 `Stage J` 已经补上标准权重证明输出：
+
+- `outputs/stage_j/standard_weight_proof.json`
+- `artifacts/stage_j_qwen_redesign/manifest.json -> standard_weight_proof`
+
+当前结论是：
+
+- `is_standard_weight_export = false`
+- `layout = buffered_stage_style`
+
+这意味着新版 `Stage J` 已经有：
+
+- component-expression manifest
+- 真实可运行的 bootstrap artifact
+
+但它还没有达到：
+
+- 标准 `model.* / lm_head.*` 权重键布局可见
+
+所以当前更准确的说法是：
+
+> 新版 `Stage J` 已经完成“部署线物化”的第一步，但尚未完成“标准权重可见性证明”的最后一步。 

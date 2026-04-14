@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from src.stage_j_standard_weight_proof import build_stage_j_standard_weight_proof
 
 def build_stage_j_redesign_manifest() -> dict[str, Any]:
     return {
@@ -85,6 +86,7 @@ def export_stage_j_redesign_checkpoint(
     manifest["server_dir"] = "server"
     manifest["client_dir"] = "client"
     manifest["component_expression"] = _build_component_expression(source_dir)
+    manifest["standard_weight_proof"] = build_stage_j_standard_weight_proof(server_dir)
     (export_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {
@@ -107,6 +109,8 @@ def build_stage_j_redesign_regression(export_dir: str | Path = "artifacts/stage_
             "server_exists": (export_dir / "server").exists(),
             "client_exists": (export_dir / "client").exists(),
             "source_stages_match": manifest.get("source_stages") == ["H", "I"],
+            "is_standard_weight_export": manifest.get("standard_weight_proof", {}).get("is_standard_weight_export"),
+            "weight_layout": manifest.get("standard_weight_proof", {}).get("layout"),
         },
         "summary": {
             "status": "ready" if manifest_path.exists() and (export_dir / "server").exists() and (export_dir / "client").exists() else "missing_artifact",
