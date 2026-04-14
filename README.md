@@ -13,6 +13,20 @@
 
 > **Stage J 解决“混淆后的模型能不能保持标准 HF 形状并恢复功能”，Stage K 解决“这些工件能不能被整理成可交付、可选 profile、可直接推理的发布目录”。**
 
+## Qwen Stage H-K redesign
+
+当前仓库正在把 Qwen 的 `Stage H/I/J/K` 从“保守 standard-shape 部署线”重构为“更贴近论文部署适配机制的可部署主线”。
+
+需要区分两套语义：
+
+- legacy conservative `Stage H/I/J/K` artifacts
+- redesigned paper-aligned Qwen `Stage H/I/J/K`
+
+迁移入口见：
+
+- [`docs/阶段H-K重构迁移说明.md`](docs/阶段H-K重构迁移说明.md)
+- [`docs/superpowers/specs/2026-04-14-qwen-stage-hk-redesign-design.md`](docs/superpowers/specs/2026-04-14-qwen-stage-hk-redesign-design.md)
+
 ---
 
 ## 1. 仓库当前完成了什么
