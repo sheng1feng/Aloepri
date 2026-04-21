@@ -161,6 +161,13 @@ Stage K 额外提供：
 
 - 阶段区分说明：[`docs/Qwen与Llama复现阶段区分说明.md`](docs/Qwen与Llama复现阶段区分说明.md)
 
+### Qwen 安全评测
+
+- 安全评测索引：[`docs/qwen_security/README.md`](docs/qwen_security/README.md)
+- 安全总报告：[`docs/qwen_security/Qwen安全总报告.md`](docs/qwen_security/Qwen安全总报告.md)
+- 部署线弱于 Stage H 的原因分析：[`docs/qwen_security/部署线弱于StageH的原因分析.md`](docs/qwen_security/部署线弱于StageH的原因分析.md)
+- 论文部署适配机制整理：[`docs/AloePri 论文中的部署适配机制整理.md`](docs/AloePri 论文中的部署适配机制整理.md)
+
 ### Llama 文档
 
 - 快速使用说明：[`docs/Llama-3.2-3B快速使用说明.md`](docs/Llama-3.2-3B快速使用说明.md)

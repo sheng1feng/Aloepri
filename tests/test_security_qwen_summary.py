@@ -18,6 +18,20 @@ def test_resolve_security_target_maps_stage_k_profile_to_profile_dir() -> None:
     assert resolved.client_secret_path is not None and resolved.client_secret_path.endswith("client_secret.pt")
 
 
+def test_resolve_security_target_maps_gate5_scan_artifact() -> None:
+    resolved = resolve_security_target("stage_j_tiny_b_scan")
+    assert resolved.profile == "tiny_b"
+    assert resolved.server_dir is not None and resolved.server_dir.endswith("artifacts/stage_j_gate5_tiny_b/server")
+    assert resolved.client_secret_path is not None and resolved.client_secret_path.endswith("artifacts/stage_j_gate5_tiny_b/client/client_secret.pt")
+
+
+def test_resolve_security_target_maps_gate6_artifact() -> None:
+    resolved = resolve_security_target("gate6_targeted_mild")
+    assert resolved.profile == "targeted_mild"
+    assert resolved.server_dir is not None and resolved.server_dir.endswith("artifacts/stage_j_gate6_targeted_mild/server")
+    assert resolved.client_secret_path is not None and resolved.client_secret_path.endswith("artifacts/stage_j_gate6_targeted_mild/client/client_secret.pt")
+
+
 def test_security_summary_collects_template_results(tmp_path: Path) -> None:
     vma_target = get_security_target("stage_j_stable_reference").to_target()
     tfma_target = get_security_target("stage_k_tiny_a").to_target()

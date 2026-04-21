@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.aloepri.config import AloePriConfig
 from src.aloepri.engine import AloePriEngine
 from src.model_loader import load_model_and_tokenizer
 from src.evaluator import max_abs_error
@@ -27,17 +28,23 @@ def main():
     # 1. Load baseline
     tokenizer, model = load_model_and_tokenizer(args.model_path, dtype="float32")
     
-    # 3. Apply AloePri Obfuscation
-    recorder = TraceRecorder()
-    engine = AloePriEngine.from_model(
-        model,
-        tokenizer,
+    # 2. Setup Config
+    config = AloePriConfig(
+        hidden_size=model.config.hidden_size,
+        num_hidden_layers=model.config.num_hidden_layers,
+        num_attention_heads=model.config.num_attention_heads,
+        num_key_value_heads=model.config.num_key_value_heads,
+        head_dim=model.config.hidden_size // model.config.num_attention_heads,
+        rope_theta=getattr(model.config, "rope_theta", 10000.0),
         adapted_layers=list(range(args.layer_count)),
         seed=args.seed,
         alpha_e=0.0,
         alpha_h=0.0,
-        dtype="float32",
     )
+
+    # 3. Apply AloePri Obfuscation
+    recorder = TraceRecorder()
+    engine = AloePriEngine(config, tokenizer)
     obf_model = engine.obfuscate_model(model, recorder=recorder)
     
     # 4. Evaluate on prompts
