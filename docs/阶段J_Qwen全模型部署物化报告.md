@@ -69,6 +69,15 @@
 - 已经可以被标准 Hugging Face 加载器识别和加载
 - 明确不宣称已与 buffered redesign line 等价
 
+当前 bridge regression 也已经明确显示：
+
+- `generated_ids_exact_match_rate = 0.0`
+- restored logits 误差仍然很大
+
+所以这条线现在更准确的定位是：
+
+> **可加载的标准可见桥接线，而不是已等价的 redesign 导出线。**
+
 这意味着：
 
 > 当前 `Stage J` 的完善方向不再是只做单条线，而是先让“高保真 redesign”与“标准键可见导出”两条线都存在，并把它们的差距写清楚。 

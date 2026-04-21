@@ -84,6 +84,7 @@ def _build_standard_state_from_buffered(
     state: dict[str, torch.Tensor],
     *,
     hidden_size: int,
+    norm_strategy: str,
 ) -> dict[str, torch.Tensor]:
     standard: dict[str, torch.Tensor] = {}
     standard["model.embed_tokens.weight"] = state["buffer::stage_a_model.model.embed_tokens.weight"].contiguous()
@@ -91,10 +92,24 @@ def _build_standard_state_from_buffered(
 
     layer_indices = _infer_buffered_layer_indices(state)
     ones = torch.ones(hidden_size, dtype=standard["model.embed_tokens.weight"].dtype)
+
+    def norm_weight_from_metric(key: str) -> torch.Tensor:
+        if norm_strategy == "ones" or key not in state:
+            return ones.clone()
+        if norm_strategy == "metric_diag_sqrt":
+            metric = state[key].to(torch.float32)
+            diag = torch.diagonal(metric).clamp_min(0.0).sqrt().to(dtype=ones.dtype)
+            return diag.contiguous()
+        raise ValueError(f"Unsupported norm_strategy: {norm_strategy}")
+
     for layer_idx in layer_indices:
         prefix = f"buffer::stage_a_model.model.layers.{layer_idx}"
-        standard[f"model.layers.{layer_idx}.input_layernorm.weight"] = ones.clone()
-        standard[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = ones.clone()
+        standard[f"model.layers.{layer_idx}.input_layernorm.weight"] = norm_weight_from_metric(
+            f"{prefix}.input_layernorm.metric_matrix"
+        )
+        standard[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = norm_weight_from_metric(
+            f"{prefix}.post_attention_layernorm.metric_matrix"
+        )
         standard[f"model.layers.{layer_idx}.self_attn.q_proj.weight"] = state[f"{prefix}.self_attn.q_weight"].contiguous()
         standard[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = state[f"{prefix}.self_attn.k_weight"].contiguous()
         standard[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = state[f"{prefix}.self_attn.v_weight"].contiguous()
@@ -109,7 +124,7 @@ def _build_standard_state_from_buffered(
         standard[f"model.layers.{layer_idx}.mlp.up_proj.weight"] = state[f"{prefix}.mlp.up_weight"].contiguous()
         standard[f"model.layers.{layer_idx}.mlp.down_proj.weight"] = state[f"{prefix}.mlp.down_weight"].contiguous()
 
-    standard["model.norm.weight"] = ones.clone()
+    standard["model.norm.weight"] = norm_weight_from_metric("buffer::stage_a_model.model.norm.metric_matrix")
     return standard
 
 
@@ -117,6 +132,7 @@ def _materialize_buffered_source_to_standard_visible(
     *,
     source_server: Path,
     target_server: Path,
+    norm_strategy: str,
 ) -> None:
     state = load_file(str(source_server / "model.safetensors"))
     config_payload = _load_json(source_server / "config.json")
@@ -124,6 +140,7 @@ def _materialize_buffered_source_to_standard_visible(
     standard_state = _build_standard_state_from_buffered(
         state,
         hidden_size=int(modified_config["hidden_size"]),
+        norm_strategy=norm_strategy,
     )
 
     target_server.mkdir(parents=True, exist_ok=True)
@@ -144,6 +161,7 @@ def export_stage_j_redesign_standard_bridge(
     *,
     source_dir: str | Path = "artifacts/stage_j_qwen_redesign",
     materialize: bool = False,
+    norm_strategy: str = "ones",
 ) -> dict[str, Path]:
     export_dir = Path(export_dir)
     source_dir = Path(source_dir)
@@ -168,6 +186,7 @@ def export_stage_j_redesign_standard_bridge(
         _materialize_buffered_source_to_standard_visible(
             source_server=server_source,
             target_server=server_dir,
+            norm_strategy=norm_strategy,
         )
     else:
         _ensure_link_or_copy(server_source, server_dir, materialize=materialize)
@@ -179,6 +198,7 @@ def export_stage_j_redesign_standard_bridge(
     manifest["server_dir"] = "server"
     manifest["client_dir"] = "client"
     manifest["bridge_source_layout"] = "buffered_stage_style" if _is_buffered_stage_state(state) else "standard_weight_visible"
+    manifest["norm_strategy"] = norm_strategy
     manifest["standard_weight_proof"] = build_stage_j_standard_weight_proof(server_dir)
     (export_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 

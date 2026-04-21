@@ -17,6 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--export-dir", default="artifacts/stage_j_qwen_redesign_standard")
     parser.add_argument("--source-dir", default="artifacts/stage_j_qwen_redesign")
     parser.add_argument("--materialize", action="store_true")
+    parser.add_argument("--norm-strategy", default="ones", choices=["ones", "metric_diag_sqrt"])
     return parser.parse_args()
 
 
@@ -26,6 +27,7 @@ def main() -> None:
         args.export_dir,
         source_dir=args.source_dir,
         materialize=args.materialize,
+        norm_strategy=args.norm_strategy,
     )
     print(f"Exported Stage-J standard-visible bridge artifact to {result['export_dir']}")
 

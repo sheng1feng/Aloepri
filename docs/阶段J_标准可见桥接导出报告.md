@@ -57,7 +57,18 @@
 
 > **一个真实可被标准 Hugging Face 加载器加载的 Stage-J 标准可见导出物。**
 
-## 5. 下一步
+## 5. 当前等价性结论
+
+虽然这条 bridge 线已经可加载，但 `bridge_regression` 当前仍显示：
+
+- `avg_restored_full_logits_max_abs_error ≈ 31.74`
+- `generated_ids_exact_match_rate = 0.0`
+
+因此当前它的真实状态是：
+
+> **标准可见且可加载，但仍然强烈不等价于 buffered redesign line。**
+
+## 6. 下一步
 
 后续如果要把两条线真正合流，目标应是：
 
