@@ -119,6 +119,7 @@ def load_stage_h_pretrained(
         lam=float(metadata["lambda"]),
         h=int(metadata["h"]),
         seed=int(metadata["seed"]),
+        family=metadata.get("keymat_family", "algorithm1"),
     )
     kappas = calibrate_keymat_kappas(
         baseline_model=baseline_model,

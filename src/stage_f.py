@@ -12,6 +12,7 @@ from src.keymat_attention_bridge import KeyMatAttentionBridge
 from src.keymat_embed_head import KeyMatEmbeddingWrapper, KeyMatHeadWrapper, build_keymat_embed_head_artifacts
 from src.keymat_ffn import build_keymat_ffn_wrapper
 from src.keymat_norm import build_keymat_rmsnorm_wrapper, estimate_kappa_for_keymat
+from src.stage_j_keymat_family import build_diag_friendly_keymat_transform
 from src.model_loader import format_chat_prompt
 from src.obfuscate_ffn import FFNTransform, build_ffn_transform, generate_ffn_permutation, generate_ffn_scaling
 from src.stage_b import TraceRecorder, prepare_stage_a_model
@@ -494,13 +495,23 @@ def build_default_stage_f_keymat(
     lam: float,
     h: int,
     seed: int,
+    family: str = "algorithm1",
 ) -> KeyMatTransform:
-    return build_keymat_transform(
-        d=baseline_model.config.hidden_size,
-        h=h,
-        lam=lam,
-        init_seed=seed + 12000,
-        key_seed=seed + 12100,
-        inv_seed=seed + 12200,
-        dtype=torch.float32,
-    )
+    if family == "algorithm1":
+        return build_keymat_transform(
+            d=baseline_model.config.hidden_size,
+            h=h,
+            lam=lam,
+            init_seed=seed + 12000,
+            key_seed=seed + 12100,
+            inv_seed=seed + 12200,
+            dtype=torch.float32,
+        )
+    if family == "diag_friendly":
+        return build_diag_friendly_keymat_transform(
+            hidden_size=baseline_model.config.hidden_size,
+            expansion_size=h,
+            seed=seed + 12000,
+            dtype=torch.float32,
+        )
+    raise ValueError(f"Unsupported keymat family: {family}")

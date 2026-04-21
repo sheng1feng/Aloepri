@@ -24,10 +24,17 @@ def build_stage_h_full_model_from_metadata(metadata: dict, recorder: TraceRecord
     alpha_h = float(metadata.get("alpha_h", 0.0))
     beta = int(metadata.get("beta", 8))
     gamma = float(metadata.get("gamma", 1e3))
+    keymat_family = metadata.get("keymat_family", "algorithm1")
 
     set_global_seed(seed)
     tokenizer, baseline_model = load_model_and_tokenizer(model_dir, device="cpu", dtype=dtype)
-    keymat_transform = build_default_stage_f_keymat(baseline_model, lam=lam, h=h, seed=seed)
+    keymat_transform = build_default_stage_f_keymat(
+        baseline_model,
+        lam=lam,
+        h=h,
+        seed=seed,
+        family=keymat_family,
+    )
     kappas = calibrate_keymat_kappas(
         baseline_model=baseline_model,
         tokenizer=tokenizer,

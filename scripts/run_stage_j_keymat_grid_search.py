@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-size", type=int, default=896)
     parser.add_argument("--expansion-sizes", nargs="*", type=int, default=[32, 64, 128, 256])
     parser.add_argument("--lams", nargs="*", type=float, default=[0.0, 0.1, 0.3, 1.0])
+    parser.add_argument("--families", nargs="*", default=["algorithm1", "diag_friendly"])
     parser.add_argument("--seed-start", type=int, default=20260323)
     parser.add_argument("--num-candidates", type=int, default=8)
     parser.add_argument("--output-path", default="outputs/stage_j/keymat_grid_search.json")
@@ -30,6 +31,7 @@ def main() -> None:
         hidden_size=args.hidden_size,
         expansion_sizes=list(args.expansion_sizes),
         lams=list(args.lams),
+        families=list(args.families),
         seed_start=args.seed_start,
         num_candidates=args.num_candidates,
     )
@@ -38,6 +40,7 @@ def main() -> None:
         "hidden_size": args.hidden_size,
         "expansion_sizes": list(args.expansion_sizes),
         "lams": list(args.lams),
+        "families": list(args.families),
         "seed_start": args.seed_start,
         "num_candidates": args.num_candidates,
         "ranked": ranked,

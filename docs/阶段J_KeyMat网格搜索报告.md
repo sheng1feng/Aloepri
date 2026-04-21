@@ -53,3 +53,21 @@
 因此当前最准确的结论是：
 
 > **当前 KeyMat 参数族在更大 `h` 下可以变得稍微更适合部署，但这还不足以直接解决论文一致部署所需的 norm/export 语义冲突。**
+
+## 6. 与 `diag_friendly` family 的对比
+
+后续我又新增了一条 `diag_friendly` family 实验线，并把它真正拉成了：
+
+- `stage_h_pretrained_diagfriendly`
+- `stage_j_qwen_redesign_diagfriendly`
+- `stage_j_qwen_redesign_standard_diagfriendly`
+
+这条线给出的结论非常关键：
+
+- `norm_gap_summary.all_standard_rmsnorm_equivalent = true`
+- 但 `bridge_summary.generated_ids_exact_match_rate = 0.0`
+
+这说明：
+
+> 只要改掉 KeyMat family，确实可以把 `norm` 这块从“结构性冲突”变成“可标准承接”；  
+> 但这并不会自动让整条部署线等价，后续主阻塞会继续转移到 attention / FFN 侧表达。 

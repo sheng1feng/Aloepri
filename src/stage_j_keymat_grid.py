@@ -10,32 +10,36 @@ def evaluate_keymat_grid(
     hidden_size: int,
     expansion_sizes: list[int],
     lams: list[float],
+    families: list[str],
     seed_start: int,
     num_candidates: int,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for expansion_size in expansion_sizes:
-        for lam in lams:
-            candidates = [
-                evaluate_keymat_candidate(
-                    hidden_size=hidden_size,
-                    expansion_size=expansion_size,
-                    lam=lam,
-                    seed=seed_start + offset,
+    for family in families:
+        for expansion_size in expansion_sizes:
+            for lam in lams:
+                candidates = [
+                    evaluate_keymat_candidate(
+                        hidden_size=hidden_size,
+                        expansion_size=expansion_size,
+                        lam=lam,
+                        seed=seed_start + offset,
+                        family=family,
+                    )
+                    for offset in range(num_candidates)
+                ]
+                ranked = rank_keymat_candidates(candidates)
+                best = ranked[0]
+                rows.append(
+                    {
+                        "family": family,
+                        "expansion_size": expansion_size,
+                        "lam": lam,
+                        "best_seed": best["seed"],
+                        "best_offdiag_ratio": best["offdiag_ratio"],
+                        "best_condition_number": best["condition_number"],
+                    }
                 )
-                for offset in range(num_candidates)
-            ]
-            ranked = rank_keymat_candidates(candidates)
-            best = ranked[0]
-            rows.append(
-                {
-                    "expansion_size": expansion_size,
-                    "lam": lam,
-                    "best_seed": best["seed"],
-                    "best_offdiag_ratio": best["offdiag_ratio"],
-                    "best_condition_number": best["condition_number"],
-                }
-            )
     return rows
 
 

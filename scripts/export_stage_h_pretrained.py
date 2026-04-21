@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dtype", default="float32")
     parser.add_argument("--lambda", dest="lam", type=float, default=0.3)
     parser.add_argument("--h", type=int, default=128)
+    parser.add_argument("--keymat-family", default="algorithm1", choices=["algorithm1", "diag_friendly"])
     parser.add_argument("--attention-profile", default="rqk_hqk_block_taukv_taugroup")
     parser.add_argument("--alpha-e", type=float, default=0.1)
     parser.add_argument("--alpha-h", type=float, default=0.05)
@@ -36,7 +37,13 @@ def main() -> None:
     set_global_seed(args.seed)
     tokenizer, baseline_model = load_model_and_tokenizer(args.model_dir, device="cpu", dtype=args.dtype)
     adapted_layers = list(range(baseline_model.config.num_hidden_layers))
-    keymat_transform = build_default_stage_f_keymat(baseline_model, lam=args.lam, h=args.h, seed=args.seed)
+    keymat_transform = build_default_stage_f_keymat(
+        baseline_model,
+        lam=args.lam,
+        h=args.h,
+        seed=args.seed,
+        family=args.keymat_family,
+    )
     kappas = calibrate_keymat_kappas(
         baseline_model=baseline_model,
         tokenizer=tokenizer,
@@ -75,6 +82,7 @@ def main() -> None:
         "seed": args.seed,
         "lambda": args.lam,
         "h": args.h,
+        "keymat_family": args.keymat_family,
         "attention_profile": args.attention_profile,
         "alpha_e": args.alpha_e,
         "alpha_h": args.alpha_h,
