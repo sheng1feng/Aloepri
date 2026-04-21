@@ -119,6 +119,21 @@
 - 是否需要对 KeyMat 生成本身加入新的部署约束
 - 或者重新设计更直接面向标准导出的表达
 
+另外，当前 `attention gap` 审计也已经表明：
+
+- `q_feature_inv_order` 不是 identity
+- `kv_feature_inv_order` 不是 identity
+- `q_dense_inverse / k_dense_inverse` 也显著偏离单位阵
+
+这说明：
+
+> 即使 `norm` 侧问题被 `diag_friendly` family 大幅缓解，当前 buffered redesign 里的 attention 内部重排与 dense 结构仍然没有被标准 bridge 导出显式保留。
+
+因此接下来的主阻塞已经进一步聚焦到：
+
+- attention 的 export-visible 等价
+- 以及随后才是 FFN 的 export-visible 等价
+
 进一步地，`diag_friendly` family 的真实实验线已经证明：
 
 - `norm` 可以先被解决
