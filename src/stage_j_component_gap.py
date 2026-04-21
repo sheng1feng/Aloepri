@@ -18,7 +18,7 @@ def build_stage_j_component_gap_report() -> dict[str, Any]:
             "notes": "Bridge maps gate/up/down to standard keys, but expression equivalence is not yet proven.",
         },
         "norm": {
-            "status": "unresolved",
-            "notes": "Current bridge still uses placeholder or heuristic norm materialization and remains strongly non-equivalent.",
+            "status": "partially_resolved",
+            "notes": "kappa_fused currently outperforms ones and metric_diag_sqrt, but bridge regression still shows a large remaining gap.",
         },
     }

@@ -8,6 +8,8 @@ from typing import Any
 import torch
 from safetensors.torch import load_file, save_file
 
+from src.model_loader import load_model_and_tokenizer, set_global_seed
+from src.stage_f import build_default_stage_f_keymat, calibrate_keymat_kappas
 from src.stage_j_standard_weight_proof import build_stage_j_standard_weight_proof
 
 
@@ -85,6 +87,7 @@ def _build_standard_state_from_buffered(
     *,
     hidden_size: int,
     norm_strategy: str,
+    kappa_values: dict[str, Any] | None = None,
 ) -> dict[str, torch.Tensor]:
     standard: dict[str, torch.Tensor] = {}
     standard["model.embed_tokens.weight"] = state["buffer::stage_a_model.model.embed_tokens.weight"].contiguous()
@@ -92,15 +95,19 @@ def _build_standard_state_from_buffered(
 
     layer_indices = _infer_buffered_layer_indices(state)
     ones = torch.ones(hidden_size, dtype=standard["model.embed_tokens.weight"].dtype)
+    kappa_values = kappa_values or {"layers": {}, "final": 1.0}
 
     def norm_weight_from_metric(key: str) -> torch.Tensor:
-        if norm_strategy == "ones" or key not in state:
+        if norm_strategy in {"ones", "kappa_fused"} or key not in state:
             return ones.clone()
         if norm_strategy == "metric_diag_sqrt":
             metric = state[key].to(torch.float32)
             diag = torch.diagonal(metric).clamp_min(0.0).sqrt().to(dtype=ones.dtype)
             return diag.contiguous()
         raise ValueError(f"Unsupported norm_strategy: {norm_strategy}")
+
+    def layer_kappa(layer_idx: int, kind: str) -> float:
+        return float(kappa_values.get("layers", {}).get(str(layer_idx), {}).get(kind, 1.0))
 
     for layer_idx in layer_indices:
         prefix = f"buffer::stage_a_model.model.layers.{layer_idx}"
@@ -110,9 +117,11 @@ def _build_standard_state_from_buffered(
         standard[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = norm_weight_from_metric(
             f"{prefix}.post_attention_layernorm.metric_matrix"
         )
-        standard[f"model.layers.{layer_idx}.self_attn.q_proj.weight"] = state[f"{prefix}.self_attn.q_weight"].contiguous()
-        standard[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = state[f"{prefix}.self_attn.k_weight"].contiguous()
-        standard[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = state[f"{prefix}.self_attn.v_weight"].contiguous()
+        input_scale = layer_kappa(layer_idx, "input") if norm_strategy == "kappa_fused" else 1.0
+        post_attn_scale = layer_kappa(layer_idx, "post_attn") if norm_strategy == "kappa_fused" else 1.0
+        standard[f"model.layers.{layer_idx}.self_attn.q_proj.weight"] = (state[f"{prefix}.self_attn.q_weight"] * input_scale).contiguous()
+        standard[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = (state[f"{prefix}.self_attn.k_weight"] * input_scale).contiguous()
+        standard[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = (state[f"{prefix}.self_attn.v_weight"] * input_scale).contiguous()
         standard[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = state[f"{prefix}.self_attn.o_weight"].contiguous()
         if f"{prefix}.self_attn.q_bias" in state:
             standard[f"model.layers.{layer_idx}.self_attn.q_proj.bias"] = state[f"{prefix}.self_attn.q_bias"].contiguous()
@@ -120,12 +129,49 @@ def _build_standard_state_from_buffered(
             standard[f"model.layers.{layer_idx}.self_attn.k_proj.bias"] = state[f"{prefix}.self_attn.k_bias"].contiguous()
         if f"{prefix}.self_attn.v_bias" in state:
             standard[f"model.layers.{layer_idx}.self_attn.v_proj.bias"] = state[f"{prefix}.self_attn.v_bias"].contiguous()
-        standard[f"model.layers.{layer_idx}.mlp.gate_proj.weight"] = state[f"{prefix}.mlp.gate_weight"].contiguous()
-        standard[f"model.layers.{layer_idx}.mlp.up_proj.weight"] = state[f"{prefix}.mlp.up_weight"].contiguous()
+        standard[f"model.layers.{layer_idx}.mlp.gate_proj.weight"] = (state[f"{prefix}.mlp.gate_weight"] * post_attn_scale).contiguous()
+        standard[f"model.layers.{layer_idx}.mlp.up_proj.weight"] = (state[f"{prefix}.mlp.up_weight"] * post_attn_scale).contiguous()
         standard[f"model.layers.{layer_idx}.mlp.down_proj.weight"] = state[f"{prefix}.mlp.down_weight"].contiguous()
 
     standard["model.norm.weight"] = norm_weight_from_metric("buffer::stage_a_model.model.norm.metric_matrix")
+    if norm_strategy == "kappa_fused":
+        final_scale = float(kappa_values.get("final", 1.0))
+        standard["lm_head.weight"] = (standard["lm_head.weight"] * final_scale).contiguous()
     return standard
+
+
+def _load_or_estimate_kappas(source_server: Path, config_payload: dict[str, Any]) -> dict[str, Any]:
+    obf_cfg = _load_json(source_server / "obfuscation_config.json")
+    if "kappa_overrides" in obf_cfg:
+        return obf_cfg["kappa_overrides"]
+
+    required = ["model_dir", "seed", "lambda", "h", "prompts_for_kappa", "adapted_layers"]
+    if not all(key in obf_cfg for key in required):
+        return {"layers": {}, "final": 1.0}
+
+    set_global_seed(int(obf_cfg["seed"]))
+    tokenizer, baseline_model = load_model_and_tokenizer(
+        obf_cfg["model_dir"],
+        device="cpu",
+        dtype=obf_cfg.get("dtype", "float32"),
+    )
+    keymat_transform = build_default_stage_f_keymat(
+        baseline_model,
+        lam=float(obf_cfg["lambda"]),
+        h=int(obf_cfg["h"]),
+        seed=int(obf_cfg["seed"]),
+    )
+    layer_kappas = calibrate_keymat_kappas(
+        baseline_model=baseline_model,
+        tokenizer=tokenizer,
+        prompts=list(obf_cfg["prompts_for_kappa"]),
+        keymat_transform=keymat_transform,
+        trace_layers=list(obf_cfg["adapted_layers"]),
+    )
+    return {
+        "layers": {str(idx): {"input": values["input"], "post_attn": values["post_attn"]} for idx, values in layer_kappas.items()},
+        "final": 1.0,
+    }
 
 
 def _materialize_buffered_source_to_standard_visible(
@@ -137,10 +183,12 @@ def _materialize_buffered_source_to_standard_visible(
     state = load_file(str(source_server / "model.safetensors"))
     config_payload = _load_json(source_server / "config.json")
     modified_config = _build_modified_config_for_buffered_source(config_payload, state)
+    kappa_values = _load_or_estimate_kappas(source_server, modified_config) if norm_strategy == "kappa_fused" else None
     standard_state = _build_standard_state_from_buffered(
         state,
         hidden_size=int(modified_config["hidden_size"]),
         norm_strategy=norm_strategy,
+        kappa_values=kappa_values,
     )
 
     target_server.mkdir(parents=True, exist_ok=True)
@@ -161,7 +209,7 @@ def export_stage_j_redesign_standard_bridge(
     *,
     source_dir: str | Path = "artifacts/stage_j_qwen_redesign",
     materialize: bool = False,
-    norm_strategy: str = "ones",
+    norm_strategy: str = "kappa_fused",
 ) -> dict[str, Path]:
     export_dir = Path(export_dir)
     source_dir = Path(source_dir)

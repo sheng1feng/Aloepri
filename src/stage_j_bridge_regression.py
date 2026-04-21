@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -45,6 +46,8 @@ def run_stage_j_bridge_regression(
     prompts: list[str] | None = None,
     max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
 ) -> dict[str, Any]:
+    buffered_server_dir = str(Path(buffered_server_dir).resolve())
+    bridge_server_dir = str(Path(bridge_server_dir).resolve())
     buffered_bundle = load_stage_h_pretrained(buffered_server_dir)
     buffered_model = buffered_bundle["stage_model"].eval()
     tokenizer = buffered_bundle["tokenizer"]

@@ -23,3 +23,22 @@
 这时，bridge 线里使用 `ones` 或其他简单启发式，就不是“暂时没实现完整逻辑”那么简单，而是：
 
 > **当前部署约束与 buffered redesign norm 语义之间存在真实结构性张力。**
+
+## 4. 当前策略扫描结果
+
+当前 bridge norm 策略扫描结果显示：
+
+- `ones`
+  - `avg_restored_full_logits_max_abs_error ≈ 31.74`
+  - `generated_ids_exact_match_rate = 0.0`
+- `metric_diag_sqrt`
+  - 明显更差
+- `kappa_fused`
+  - `avg_restored_full_logits_max_abs_error ≈ 28.41`
+  - `generated_ids_exact_match_rate = 0.2`
+
+这说明：
+
+- 单纯用对角近似去拟合 full metric norm 是错误方向
+- 论文式 `κ` 标量修正至少是当前 bridge 线上更合理的方向
+- 但 `kappa_fused` 仍然远未达到等价程度，因此 `norm` 仍不能算彻底解决
