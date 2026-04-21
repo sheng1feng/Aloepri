@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 
@@ -14,18 +15,28 @@ from src.stage_j_bridge_scan import rank_bridge_strategies
 from src.stage_j_standard_bridge import export_stage_j_redesign_standard_bridge
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Scan Stage-J bridge norm strategies.")
+    parser.add_argument("--buffered-server-dir", default="artifacts/stage_j_qwen_redesign/server")
+    parser.add_argument("--bridge-export-dir", default="artifacts/stage_j_qwen_redesign_standard")
+    parser.add_argument("--bridge-source-dir", default="artifacts/stage_j_qwen_redesign")
+    parser.add_argument("--output-path", default="outputs/stage_j/bridge_strategy_scan.json")
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     strategies = ["ones", "metric_diag_sqrt", "kappa_fused"]
     rows = []
     for strategy in strategies:
         export_stage_j_redesign_standard_bridge(
-            "artifacts/stage_j_qwen_redesign_standard",
-            source_dir="artifacts/stage_j_qwen_redesign",
+            args.bridge_export_dir,
+            source_dir=args.bridge_source_dir,
             norm_strategy=strategy,
         )
         payload = run_stage_j_bridge_regression(
-            buffered_server_dir="artifacts/stage_j_qwen_redesign/server",
-            bridge_server_dir="artifacts/stage_j_qwen_redesign_standard/server",
+            buffered_server_dir=args.buffered_server_dir,
+            bridge_server_dir=str(Path(args.bridge_export_dir) / "server"),
         )
         rows.append(
             {
@@ -39,8 +50,8 @@ def main() -> None:
         "ranked": ranked,
         "recommended_strategy": ranked[0]["norm_strategy"] if ranked else None,
     }
-    write_json("outputs/stage_j/bridge_strategy_scan.json", output)
-    print("Saved Stage-J bridge strategy scan to outputs/stage_j/bridge_strategy_scan.json")
+    write_json(args.output_path, output)
+    print(f"Saved Stage-J bridge strategy scan to {args.output_path}")
 
 
 if __name__ == "__main__":

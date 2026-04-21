@@ -49,6 +49,16 @@ def _copy_file_if_exists(source: Path, target: Path) -> None:
         shutil.copy2(source, target)
 
 
+def _resolve_norm_strategy(source_server: Path, norm_strategy: str) -> str:
+    if norm_strategy != "auto":
+        return norm_strategy
+    obf_cfg = _load_json(source_server / "obfuscation_config.json")
+    family = obf_cfg.get("keymat_family", "algorithm1")
+    if family == "diag_friendly":
+        return "metric_diag_sqrt"
+    return "kappa_fused"
+
+
 def _is_buffered_stage_state(state: dict[str, torch.Tensor]) -> bool:
     return "buffer::stage_a_model.model.embed_tokens.weight" in state
 
@@ -209,7 +219,7 @@ def export_stage_j_redesign_standard_bridge(
     *,
     source_dir: str | Path = "artifacts/stage_j_qwen_redesign",
     materialize: bool = False,
-    norm_strategy: str = "kappa_fused",
+    norm_strategy: str = "auto",
 ) -> dict[str, Path]:
     export_dir = Path(export_dir)
     source_dir = Path(source_dir)
@@ -225,6 +235,7 @@ def export_stage_j_redesign_standard_bridge(
     server_dir = export_dir / "server"
     client_dir = export_dir / "client"
     state = load_file(str(server_source / "model.safetensors"))
+    resolved_norm_strategy = _resolve_norm_strategy(server_source, norm_strategy)
     if _is_buffered_stage_state(state):
         if server_dir.exists() or server_dir.is_symlink():
             if server_dir.is_symlink() or server_dir.is_file():
@@ -234,7 +245,7 @@ def export_stage_j_redesign_standard_bridge(
         _materialize_buffered_source_to_standard_visible(
             source_server=server_source,
             target_server=server_dir,
-            norm_strategy=norm_strategy,
+            norm_strategy=resolved_norm_strategy,
         )
     else:
         _ensure_link_or_copy(server_source, server_dir, materialize=materialize)
@@ -246,7 +257,7 @@ def export_stage_j_redesign_standard_bridge(
     manifest["server_dir"] = "server"
     manifest["client_dir"] = "client"
     manifest["bridge_source_layout"] = "buffered_stage_style" if _is_buffered_stage_state(state) else "standard_weight_visible"
-    manifest["norm_strategy"] = norm_strategy
+    manifest["norm_strategy"] = resolved_norm_strategy
     manifest["standard_weight_proof"] = build_stage_j_standard_weight_proof(server_dir)
     (export_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 

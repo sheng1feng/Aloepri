@@ -17,7 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--export-dir", default="artifacts/stage_j_qwen_redesign_standard")
     parser.add_argument("--source-dir", default="artifacts/stage_j_qwen_redesign")
     parser.add_argument("--materialize", action="store_true")
-    parser.add_argument("--norm-strategy", default="kappa_fused", choices=["ones", "metric_diag_sqrt", "kappa_fused"])
+    parser.add_argument("--norm-strategy", default="auto", choices=["auto", "ones", "metric_diag_sqrt", "kappa_fused"])
     return parser.parse_args()
 
 

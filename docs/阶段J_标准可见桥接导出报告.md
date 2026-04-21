@@ -40,7 +40,8 @@
 - `config`
   - 按 buffered 权重形状改写 `hidden_size / head_dim`
 - `norm`
-  - 先用占位的标准可见 materialization，尚不宣称与 buffered redesign 等价
+  - 当前默认是 `auto`
+  - 会按 `keymat_family` 自动选择更合适的 bridge norm 策略
 
 ## 4. 当前已验证的能力
 
@@ -61,14 +62,17 @@
 
 虽然这条 bridge 线已经可加载，但 `bridge_regression` 当前仍显示：
 
-- `kappa_fused` 是当前最优 bridge norm 策略
-- 在该策略下：
+- 在 `algorithm1` family 下：
+  - `kappa_fused` 是当前最优 bridge norm 策略
   - `avg_restored_full_logits_max_abs_error ≈ 28.41`
   - `generated_ids_exact_match_rate = 0.2`
+- 在 `diag_friendly` family 下：
+  - `metric_diag_sqrt` 反而更优
+  - 但最优结果依然没有达到等价导出
 
 因此当前它的真实状态是：
 
-> **标准可见且可加载，并且 `kappa_fused` 明显优于其他 norm 策略；但它仍然明显不等价于 buffered redesign line。**
+> **标准可见且可加载，并且 bridge norm 策略已经开始呈现 family-dependent 特征；但它仍然明显不等价于 buffered redesign line。**
 
 ## 6. 下一步
 
