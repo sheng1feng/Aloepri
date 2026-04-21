@@ -18,7 +18,8 @@
 
 当前这条桥接线：
 
-- 使用标准权重可见源工件作为 source
+- 以 `artifacts/stage_j_qwen_redesign` 作为 source
+- 对其中 buffered stage-style 权重做最小标准可见 materialization
 - 明确标记为 `standard_visible_bridge`
 - 明确标记：
   - `equivalence_to_buffered_redesign = false`
@@ -32,7 +33,31 @@
 - `artifacts/stage_j_qwen_redesign_standard/manifest.json`
 - `manifest.standard_weight_proof`
 
-## 4. 下一步
+当前 bridge 的 materialization 策略是：
+
+- `embed / lm_head / qkv / o / gate / up / down`
+  - 直接从 buffered redesign 权重映射到标准键
+- `config`
+  - 按 buffered 权重形状改写 `hidden_size / head_dim`
+- `norm`
+  - 先用占位的标准可见 materialization，尚不宣称与 buffered redesign 等价
+
+## 4. 当前已验证的能力
+
+当前 `artifacts/stage_j_qwen_redesign_standard/server` 已经通过两层验证：
+
+1. `standard_weight_proof`
+   - `is_standard_weight_export = true`
+   - `layout = standard_weight_visible`
+2. 标准加载器 smoke
+   - `AutoConfig.from_pretrained(...)` 可识别
+   - `AutoModelForCausalLM.from_pretrained(...)` 可加载
+
+这说明当前 bridge 线已经不只是“形式上写成标准键”，而是：
+
+> **一个真实可被标准 Hugging Face 加载器加载的 Stage-J 标准可见导出物。**
+
+## 5. 下一步
 
 后续如果要把两条线真正合流，目标应是：
 

@@ -65,7 +65,8 @@
 ### 5.2 standard-visible bridge line
 
 - `artifacts/stage_j_qwen_redesign_standard`
-- 当前先用标准键可见源工件建立桥接出口
+- 当前从 buffered redesign source 做最小标准可见 materialization
+- 已经可以被标准 Hugging Face 加载器识别和加载
 - 明确不宣称已与 buffered redesign line 等价
 
 这意味着：

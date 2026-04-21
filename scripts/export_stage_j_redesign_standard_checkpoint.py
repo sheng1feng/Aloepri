@@ -15,7 +15,7 @@ from src.stage_j_standard_bridge import export_stage_j_redesign_standard_bridge
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export the Stage-J standard-visible bridge artifact.")
     parser.add_argument("--export-dir", default="artifacts/stage_j_qwen_redesign_standard")
-    parser.add_argument("--source-dir", default="artifacts/stage_j_full_square")
+    parser.add_argument("--source-dir", default="artifacts/stage_j_qwen_redesign")
     parser.add_argument("--materialize", action="store_true")
     return parser.parse_args()
 

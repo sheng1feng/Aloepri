@@ -5,6 +5,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import torch
+from safetensors.torch import load_file, save_file
+
 from src.stage_j_standard_weight_proof import build_stage_j_standard_weight_proof
 
 
@@ -26,16 +29,120 @@ def build_stage_j_standard_bridge_manifest() -> dict[str, Any]:
         "track": "standard_visible_bridge",
         "goal": "standard_weight_visible_bridge_for_redesigned_stage_j",
         "buffered_reference": "artifacts/stage_j_qwen_redesign",
-        "standard_visible_source": "artifacts/stage_j_full_square",
+        "standard_visible_source": "artifacts/stage_j_qwen_redesign",
         "equivalence_to_buffered_redesign": False,
         "notes": "Bridge artifact: standard-weight-visible, but not yet proven equivalent to the buffered redesign line.",
     }
 
 
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _copy_file_if_exists(source: Path, target: Path) -> None:
+    if source.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def _is_buffered_stage_state(state: dict[str, torch.Tensor]) -> bool:
+    return "buffer::stage_a_model.model.embed_tokens.weight" in state
+
+
+def _infer_buffered_layer_indices(state: dict[str, torch.Tensor]) -> list[int]:
+    prefix = "buffer::stage_a_model.model.layers."
+    indices: set[int] = set()
+    for key in state:
+        if key.startswith(prefix):
+            remain = key[len(prefix) :]
+            layer_idx = remain.split(".", 1)[0]
+            if layer_idx.isdigit():
+                indices.add(int(layer_idx))
+    return sorted(indices)
+
+
+def _build_modified_config_for_buffered_source(
+    config_payload: dict[str, Any],
+    state: dict[str, torch.Tensor],
+) -> dict[str, Any]:
+    updated = dict(config_payload)
+    hidden_size = int(state["buffer::stage_a_model.model.embed_tokens.weight"].shape[1])
+    q_out = int(state["buffer::stage_a_model.model.layers.0.self_attn.q_weight"].shape[0])
+    gate_out = int(state["buffer::stage_a_model.model.layers.0.mlp.gate_weight"].shape[0])
+    num_attention_heads = int(updated["num_attention_heads"])
+    head_dim = q_out // num_attention_heads
+    updated["hidden_size"] = hidden_size
+    updated["intermediate_size"] = gate_out
+    updated["head_dim"] = head_dim
+    updated["tie_word_embeddings"] = False
+    return updated
+
+
+def _build_standard_state_from_buffered(
+    state: dict[str, torch.Tensor],
+    *,
+    hidden_size: int,
+) -> dict[str, torch.Tensor]:
+    standard: dict[str, torch.Tensor] = {}
+    standard["model.embed_tokens.weight"] = state["buffer::stage_a_model.model.embed_tokens.weight"].contiguous()
+    standard["lm_head.weight"] = state["buffer::stage_a_model.lm_head.weight"].contiguous()
+
+    layer_indices = _infer_buffered_layer_indices(state)
+    ones = torch.ones(hidden_size, dtype=standard["model.embed_tokens.weight"].dtype)
+    for layer_idx in layer_indices:
+        prefix = f"buffer::stage_a_model.model.layers.{layer_idx}"
+        standard[f"model.layers.{layer_idx}.input_layernorm.weight"] = ones.clone()
+        standard[f"model.layers.{layer_idx}.post_attention_layernorm.weight"] = ones.clone()
+        standard[f"model.layers.{layer_idx}.self_attn.q_proj.weight"] = state[f"{prefix}.self_attn.q_weight"].contiguous()
+        standard[f"model.layers.{layer_idx}.self_attn.k_proj.weight"] = state[f"{prefix}.self_attn.k_weight"].contiguous()
+        standard[f"model.layers.{layer_idx}.self_attn.v_proj.weight"] = state[f"{prefix}.self_attn.v_weight"].contiguous()
+        standard[f"model.layers.{layer_idx}.self_attn.o_proj.weight"] = state[f"{prefix}.self_attn.o_weight"].contiguous()
+        if f"{prefix}.self_attn.q_bias" in state:
+            standard[f"model.layers.{layer_idx}.self_attn.q_proj.bias"] = state[f"{prefix}.self_attn.q_bias"].contiguous()
+        if f"{prefix}.self_attn.k_bias" in state:
+            standard[f"model.layers.{layer_idx}.self_attn.k_proj.bias"] = state[f"{prefix}.self_attn.k_bias"].contiguous()
+        if f"{prefix}.self_attn.v_bias" in state:
+            standard[f"model.layers.{layer_idx}.self_attn.v_proj.bias"] = state[f"{prefix}.self_attn.v_bias"].contiguous()
+        standard[f"model.layers.{layer_idx}.mlp.gate_proj.weight"] = state[f"{prefix}.mlp.gate_weight"].contiguous()
+        standard[f"model.layers.{layer_idx}.mlp.up_proj.weight"] = state[f"{prefix}.mlp.up_weight"].contiguous()
+        standard[f"model.layers.{layer_idx}.mlp.down_proj.weight"] = state[f"{prefix}.mlp.down_weight"].contiguous()
+
+    standard["model.norm.weight"] = ones.clone()
+    return standard
+
+
+def _materialize_buffered_source_to_standard_visible(
+    *,
+    source_server: Path,
+    target_server: Path,
+) -> None:
+    state = load_file(str(source_server / "model.safetensors"))
+    config_payload = _load_json(source_server / "config.json")
+    modified_config = _build_modified_config_for_buffered_source(config_payload, state)
+    standard_state = _build_standard_state_from_buffered(
+        state,
+        hidden_size=int(modified_config["hidden_size"]),
+    )
+
+    target_server.mkdir(parents=True, exist_ok=True)
+    save_file(standard_state, str(target_server / "model.safetensors"))
+    (target_server / "config.json").write_text(json.dumps(modified_config, ensure_ascii=False, indent=2), encoding="utf-8")
+    for filename in [
+        "generation_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "special_tokens_map.json",
+    ]:
+        _copy_file_if_exists(source_server / filename, target_server / filename)
+
+
 def export_stage_j_redesign_standard_bridge(
     export_dir: str | Path,
     *,
-    source_dir: str | Path = "artifacts/stage_j_full_square",
+    source_dir: str | Path = "artifacts/stage_j_qwen_redesign",
     materialize: bool = False,
 ) -> dict[str, Path]:
     export_dir = Path(export_dir)
@@ -51,7 +158,19 @@ def export_stage_j_redesign_standard_bridge(
     export_dir.mkdir(parents=True, exist_ok=True)
     server_dir = export_dir / "server"
     client_dir = export_dir / "client"
-    _ensure_link_or_copy(server_source, server_dir, materialize=materialize)
+    state = load_file(str(server_source / "model.safetensors"))
+    if _is_buffered_stage_state(state):
+        if server_dir.exists() or server_dir.is_symlink():
+            if server_dir.is_symlink() or server_dir.is_file():
+                server_dir.unlink()
+            else:
+                shutil.rmtree(server_dir)
+        _materialize_buffered_source_to_standard_visible(
+            source_server=server_source,
+            target_server=server_dir,
+        )
+    else:
+        _ensure_link_or_copy(server_source, server_dir, materialize=materialize)
     _ensure_link_or_copy(client_source, client_dir, materialize=materialize)
 
     manifest = build_stage_j_standard_bridge_manifest()
@@ -59,6 +178,7 @@ def export_stage_j_redesign_standard_bridge(
     manifest["resolved_source_dir"] = str(source_dir)
     manifest["server_dir"] = "server"
     manifest["client_dir"] = "client"
+    manifest["bridge_source_layout"] = "buffered_stage_style" if _is_buffered_stage_state(state) else "standard_weight_visible"
     manifest["standard_weight_proof"] = build_stage_j_standard_weight_proof(server_dir)
     (export_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
