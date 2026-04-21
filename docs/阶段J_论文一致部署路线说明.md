@@ -109,6 +109,16 @@
 3. 直接面向标准 `model.*` 权重键布局实现这些表达
 4. 再重新跑 correctness / `VMA / IMA / ISA`
 
+当前新增的 `KeyMat` 网格搜索也进一步说明：
+
+- 调大 `h` 确实能让 `QQ^T` 稍微更 “norm-friendly”
+- 但即使最优候选也仍然保持很高的 `offdiag_ratio`
+
+所以后续如果继续要追论文一致部署，重点不应只是“调更好的 seed / h / λ”，而要考虑：
+
+- 是否需要对 KeyMat 生成本身加入新的部署约束
+- 或者重新设计更直接面向标准导出的表达
+
 ## 6. 一句话结论
 
 > 如果目标是“与原始论文一致的混淆部署”，那么当前 buffered redesign 与 standard-visible bridge 都只能算过渡形态；下一步不该继续把“bridge 更像 buffered redesign”当成最终目标，而应直接转向构造一条 paper-consistent、标准运行图、标准键布局、且尽量保留论文复杂扰动表达的真正部署线。 
