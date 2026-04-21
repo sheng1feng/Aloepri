@@ -41,6 +41,15 @@
 - attention 内部附加结构的等价 materialization
 - `norm` 的真正等价桥接
 
+另外，当前 `norm_gap_report` 已经给出一个更硬的证据：
+
+- `offdiag_ratio ≈ 0.972`
+- `standard_rmsnorm_equivalent = false`
+
+这说明当前 `norm` 问题不是“再调一个桥接权重就行”，而是：
+
+> **buffered redesign 的 norm 本质上是 full metric 结构，和标准 RMSNorm 权重向量语义存在强结构性张力。**
+
 因此当前最合理的判断是：
 
 > 当前 bridge 线已完成“标准可见导出”，但尚未完成“语义等价导出”。 

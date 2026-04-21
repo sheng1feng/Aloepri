@@ -93,6 +93,13 @@
 - 只存在于 `buffer::stage_a_model.*` 的内部信息
 - 只在 custom wrapper / custom module 中可见、但标准权重里不可见的表达
 
+当前 `norm gap` 审计已经说明：
+
+- `offdiag_ratio ≈ 0.972`
+- `standard_rmsnorm_equivalent = false`
+
+因此，当前 buffered redesign 里的 metric-based norm 不能被简单视为“以后再抄成一个标准 RMSNorm 权重向量”。
+
 ## 5. 新的推进策略
 
 因此，后续 `Stage J` 的正确推进顺序应改为：
