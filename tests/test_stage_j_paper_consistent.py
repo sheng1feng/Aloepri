@@ -7,6 +7,7 @@ import torch
 from safetensors.torch import save_file
 
 from src.stage_j_paper_consistent import (
+    _build_export_visible_component_metadata,
     build_stage_j_paper_consistent_target,
     export_stage_j_paper_consistent_candidate,
 )
@@ -158,6 +159,33 @@ def test_export_stage_j_paper_consistent_candidate_carries_component_metadata(tm
 
     manifest = json.loads((export_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["export_visible_components"]["attention"]["profile"] == "rqk_hqk_block_taukv_taugroup"
+    assert manifest["export_visible_components"]["attention"]["has_profile"] is True
+    assert manifest["export_visible_components"]["attention"]["has_head_group_semantics"] is True
+    assert manifest["export_visible_components"]["attention"]["has_block_semantics"] is True
     assert manifest["export_visible_components"]["ffn"]["adapted_layers_count"] == 3
     assert manifest["export_visible_components"]["norm"]["strategy"] == "kappa_fused"
     assert manifest["export_visible_components"]["norm"]["has_kappa_overrides"] is True
+
+
+def test_export_visible_metadata_marks_kappa_fused_calibratable_without_overrides(tmp_path: Path) -> None:
+    source_server = tmp_path / "server"
+    source_server.mkdir(parents=True)
+    (source_server / "obfuscation_config.json").write_text(
+        json.dumps(
+            {
+                "attention_profile": "rqk_hqk_block_taukv_taugroup",
+                "model_dir": "Qwen/Qwen2.5-0.5B",
+                "seed": 7,
+                "lambda": 0.3,
+                "h": 128,
+                "prompts_for_kappa": ["hello"],
+                "adapted_layers": [0, 1],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    metadata = _build_export_visible_component_metadata(source_server, "kappa_fused")
+    assert metadata["norm"]["has_kappa_overrides"] is True

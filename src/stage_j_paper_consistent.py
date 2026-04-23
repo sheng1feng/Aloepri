@@ -40,10 +40,23 @@ def _build_export_visible_component_metadata(source_server: Path, norm_strategy:
     obfuscation_config = _load_json(source_server / "obfuscation_config.json")
     adapted_layers_raw = obfuscation_config.get("adapted_layers", [])
     adapted_layers = adapted_layers_raw if isinstance(adapted_layers_raw, list) else []
-    has_kappa_overrides = "kappa_overrides" in obfuscation_config
+    attention_profile = obfuscation_config.get("attention_profile")
+    attention_profile_str = attention_profile if isinstance(attention_profile, str) else ""
+    attention_profile_lower = attention_profile_str.lower()
+    has_profile = bool(attention_profile_str)
+    has_head_group_semantics = has_profile and ("hqk" in attention_profile_lower or "group" in attention_profile_lower)
+    has_block_semantics = has_profile and ("block" in attention_profile_lower)
+
+    has_explicit_kappa_overrides = "kappa_overrides" in obfuscation_config
+    calibration_required_keys = {"model_dir", "seed", "lambda", "h", "prompts_for_kappa", "adapted_layers"}
+    has_calibration_inputs = calibration_required_keys.issubset(obfuscation_config.keys())
+    has_kappa_overrides = norm_strategy == "kappa_fused" and (has_explicit_kappa_overrides or has_calibration_inputs)
     return {
         "attention": {
-            "profile": obfuscation_config.get("attention_profile"),
+            "profile": attention_profile,
+            "has_profile": has_profile,
+            "has_head_group_semantics": has_head_group_semantics,
+            "has_block_semantics": has_block_semantics,
             "lambda": obfuscation_config.get("lambda"),
             "h": obfuscation_config.get("h"),
             "alpha_e": obfuscation_config.get("alpha_e"),
