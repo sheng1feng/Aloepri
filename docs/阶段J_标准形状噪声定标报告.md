@@ -1,6 +1,6 @@
 # 阶段 J：标准形状 full-layer 噪声定标报告
 
-> Legacy note: 本文档对应的是 **旧版 Stage J** 的 conservative standard-shape 噪声定标。新版 `Stage J` 的 canonical 定义见 `docs/阶段J_Qwen全模型部署物化报告.md`。
+> Legacy note: 本文档对应的是 **旧版 Stage J** 的 conservative standard-shape 噪声定标。新版 `Stage J` 的 canonical 定义见 `docs/阶段J_论文一致部署路线说明.md`。
 
 本文档记录在 **standard-shape / non-expanding full-layer** 路线上的第一轮噪声定标结果。
 

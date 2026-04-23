@@ -102,7 +102,44 @@
 
 因此，当前 buffered redesign 里的 metric-based norm 不能被简单视为“以后再抄成一个标准 RMSNorm 权重向量”。
 
-## 5. 新的推进策略
+## 5. 当前 Stage J 的中间产物定位
+
+### 5.1 buffered redesign line
+
+- `artifacts/stage_j_qwen_redesign`
+- 提供更贴近论文复杂参数表达的中间证据
+- 已经在 `VMA / ISA hidden_state` 上显著优于旧 conservative line
+- 仍不是最终交付形态，因为导出键布局仍主要是 buffered stage-style
+
+### 5.2 standard-visible bridge line
+
+- `artifacts/stage_j_qwen_redesign_standard`
+- 已经完成标准 `model.* / lm_head.*` 键布局
+- 已经通过标准加载器 smoke
+- 仍不是最终答案，因为它只是 bridge，不等价于 buffered redesign，也不等于最终论文一致部署物
+
+## 6. 标准权重可见性证明
+
+当前 `Stage J` 必须同时区分两件事：
+
+1. `buffered redesign` 的表达保留程度；
+2. `standard-visible bridge` 的标准权重可见性证明。
+
+当前结论是：
+
+- `artifacts/stage_j_qwen_redesign`
+  - `is_standard_weight_export = false`
+  - `layout = buffered_stage_style`
+- `artifacts/stage_j_qwen_redesign_standard`
+  - `is_standard_weight_export = true`
+  - `layout = standard_weight_visible`
+  - `equivalence_to_buffered_redesign = false`
+
+所以当前最准确的描述不是“Stage J 已经完成最终导出”，而是：
+
+> `Stage J` 已经同时拿到了高保真中间表达证据和标准键导出证据，但两者还没有在最终论文一致部署物上合流。
+
+## 7. 新的推进策略
 
 因此，后续 `Stage J` 的正确推进顺序应改为：
 
@@ -146,6 +183,6 @@
 1. 用更 deployment-friendly 的 KeyMat family 先消掉 `norm` 冲突
 2. 然后把主要攻坚点转到 attention / FFN 的 export-visible 等价上
 
-## 6. 一句话结论
+## 8. 一句话结论
 
 > 如果目标是“与原始论文一致的混淆部署”，那么当前 buffered redesign 与 standard-visible bridge 都只能算过渡形态；下一步不该继续把“bridge 更像 buffered redesign”当成最终目标，而应直接转向构造一条 paper-consistent、标准运行图、标准键布局、且尽量保留论文复杂扰动表达的真正部署线。 

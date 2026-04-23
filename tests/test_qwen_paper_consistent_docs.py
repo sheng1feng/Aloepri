@@ -31,3 +31,16 @@ def test_canonical_stage_reports_are_stage_local() -> None:
             r"\[[^\]]*论文一致最终部署主线\.md[^\]]*\]\((?:\./)?(?:docs/)?论文一致最终部署主线\.md\)",
             text,
         )
+
+
+def test_stage_j_route_doc_absorbs_bridge_and_weight_proof() -> None:
+    text = Path("docs/阶段J_论文一致部署路线说明.md").read_text(encoding="utf-8")
+    assert "标准权重可见性证明" in text
+    assert "standard-visible bridge line" in text
+    assert "buffered redesign line" in text
+
+
+def test_redundant_stage_j_docs_removed() -> None:
+    assert not Path("docs/阶段J_Qwen全模型部署物化报告.md").exists()
+    assert not Path("docs/阶段J_标准可见桥接导出报告.md").exists()
+    assert not Path("docs/阶段J_标准权重证明报告.md").exists()
