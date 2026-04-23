@@ -217,6 +217,13 @@ def test_build_stage_j_paper_consistent_evidence_bundle_writes_all_required_repo
         ),
         encoding="utf-8",
     )
+    save_file(
+        {
+            "model.embed_tokens.weight": torch.zeros(8, 12),
+            "lm_head.weight": torch.zeros(8, 12),
+        },
+        str(candidate_dir / "server" / "model.safetensors"),
+    )
     bundle = build_stage_j_paper_consistent_evidence_bundle(
         candidate_dir=candidate_dir,
         source_dir=source_dir,
@@ -235,6 +242,50 @@ def test_build_stage_j_paper_consistent_evidence_bundle_writes_all_required_repo
     assert bundle["ffn_export_visible_proof"]["status"] == "pass"
     assert bundle["norm_export_visible_proof"]["status"] == "pass"
     assert bundle["correctness_regression"]["status"] == "pass"
+
+
+def test_build_stage_j_paper_consistent_evidence_bundle_requires_current_candidate_weights(tmp_path: Path) -> None:
+    candidate_dir = tmp_path / "artifacts" / "stage_j_qwen_paper_consistent"
+    source_dir = tmp_path / "artifacts" / "stage_j_qwen_redesign"
+    (candidate_dir / "server").mkdir(parents=True)
+    (candidate_dir / "client").mkdir(parents=True)
+    (source_dir / "server").mkdir(parents=True)
+    (source_dir / "client").mkdir(parents=True)
+    (candidate_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "track": "paper_consistent_candidate",
+                "norm_strategy": "kappa_fused",
+                "standard_weight_proof": {"is_standard_weight_export": True, "layout": "standard_weight_visible"},
+                "export_visible_components": {
+                    "attention": {"profile": "rqk_hqk_block_taukv_taugroup", "has_profile": True, "has_head_group_semantics": True, "has_block_semantics": True},
+                    "ffn": {"adapted_layers_count": 2, "beta": 0.25, "gamma": 0.75},
+                    "norm": {"strategy": "kappa_fused", "has_kappa_overrides": True},
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = build_stage_j_paper_consistent_evidence_bundle(
+        candidate_dir=candidate_dir,
+        source_dir=source_dir,
+        output_dir=tmp_path / "outputs" / "stage_j" / "paper_consistent",
+        correctness_payload={
+            "summary": {
+                "generated_ids_exact_match_rate": 1.0,
+                "generated_text_exact_match_rate": 1.0,
+                "avg_restored_full_logits_max_abs_error": 0.0,
+            }
+        },
+    )
+
+    assert bundle["standard_weight_proof"]["status"] == "fail"
+    assert bundle["standard_weight_proof"]["layout"] == "missing_model_safetensors"
+    assert bundle["completion_summary"]["completion_status"] == "not_complete"
+    assert "standard_weight_proof" in bundle["completion_summary"]["blocking_components"]
 
 
 def test_build_stage_j_paper_consistent_completion_summary_returns_export_visible_complete() -> None:

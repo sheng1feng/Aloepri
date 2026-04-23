@@ -188,17 +188,7 @@ def build_stage_j_paper_consistent_evidence_bundle(
     source_dir = Path(source_dir)
     output_dir = Path(output_dir)
     manifest = _load_json(candidate_dir / "manifest.json")
-    prior_standard_weight_proof = manifest.get("standard_weight_proof", {})
-    refreshed_standard_weight_proof = build_stage_j_standard_weight_proof(candidate_dir / "server")
-    fallback_standard_weight_export = bool(prior_standard_weight_proof.get("is_standard_weight_export"))
-    refreshed_standard_weight_export = bool(refreshed_standard_weight_proof.get("is_standard_weight_export"))
-    effective_standard_weight_export = refreshed_standard_weight_export or (
-        refreshed_standard_weight_proof.get("layout") == "missing_model_safetensors" and fallback_standard_weight_export
-    )
-    manifest["standard_weight_proof"] = {
-        **refreshed_standard_weight_proof,
-        "is_standard_weight_export": effective_standard_weight_export,
-    }
+    manifest["standard_weight_proof"] = build_stage_j_standard_weight_proof(candidate_dir / "server")
 
     if correctness_payload is None:
         correctness_payload = run_stage_j_bridge_regression(
