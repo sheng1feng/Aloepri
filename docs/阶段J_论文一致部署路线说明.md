@@ -2,6 +2,19 @@
 
 > Canonical note: 本文档只回答当前 `Stage J` 的状态，不承担全局主线说明。Qwen 唯一主线入口见 [docs/论文一致最终部署主线.md](论文一致最终部署主线.md)。
 
+## 当前唯一活跃候选部署物
+
+当前 `Stage J` 只保留一个活跃候选部署物定义：
+
+- `artifacts/stage_j_qwen_paper_consistent`
+- 统一证据包输出目录：`outputs/stage_j/paper_consistent/`
+- 当前是否达到 export-visible completion，以 `outputs/stage_j/paper_consistent/completion_summary.json` 为准
+
+以下目录继续保留，但只承担辅助证据职责：
+
+- `artifacts/stage_j_qwen_redesign`
+- `artifacts/stage_j_qwen_redesign_standard`：历史中间线
+
 ## 1. 为什么当前目标需要重定义
 
 到目前为止，仓库里已经建立了两条 `Stage J` 后段路线：
@@ -111,7 +124,7 @@
 - 已经在 `VMA / ISA hidden_state` 上显著优于旧 conservative line
 - 仍不是最终交付形态，因为导出键布局仍主要是 buffered stage-style
 
-### 5.2 standard-visible bridge line
+### 5.2 历史中间线：standard-visible bridge line
 
 - `artifacts/stage_j_qwen_redesign_standard`
 - 已经完成标准 `model.* / lm_head.*` 键布局
@@ -127,6 +140,10 @@
 
 当前结论是：
 
+- `artifacts/stage_j_qwen_paper_consistent`
+  - 当前唯一活跃候选部署物目录
+  - 统一证据包路径为 `outputs/stage_j/paper_consistent/`
+  - 当前完成状态以 `outputs/stage_j/paper_consistent/completion_summary.json` 为准
 - `artifacts/stage_j_qwen_redesign`
   - `is_standard_weight_export = false`
   - `layout = buffered_stage_style`

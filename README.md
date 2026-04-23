@@ -30,6 +30,7 @@ legacy conservative `Stage H/I/J/K`、buffered redesign、standard-visible bridg
 Qwen 当前只认一条主线：论文一致最终部署线。当前状态以主入口文档为准，已明确 final `Stage J/K` 仍在收口阶段：
 
 - 主入口：[`docs/论文一致最终部署主线.md`](docs/论文一致最终部署主线.md)
+- 当前 Stage J 唯一候选部署物目录：`artifacts/stage_j_qwen_paper_consistent/`
 - 历史 `standard-shape`/旧 `Stage K` 工件仅作为历史证据，不再作为默认交付路径
 
 ### Llama-3.2-3B
@@ -167,6 +168,7 @@ Stage K 额外提供：
 ### Qwen 主线
 
 - 主线总入口：[`docs/论文一致最终部署主线.md`](docs/论文一致最终部署主线.md)
+- 当前 Stage J 唯一候选部署物：`artifacts/stage_j_qwen_paper_consistent/`
 - Stage H：[`docs/阶段H_Qwen可部署混淆表达重构报告.md`](docs/阶段H_Qwen可部署混淆表达重构报告.md)
 - Stage I：[`docs/阶段I_部署约束验证报告.md`](docs/阶段I_部署约束验证报告.md)
 - Stage J：[`docs/阶段J_论文一致部署路线说明.md`](docs/阶段J_论文一致部署路线说明.md)

@@ -77,3 +77,18 @@ def test_mainline_doc_next_steps_are_real_remaining_work() -> None:
     assert "固定唯一主线文档与阶段主报告" not in next_steps
     assert "合并 Stage-J 冗余文档" not in next_steps
     assert "移除 legacy / bridge / redesign 并列叙事" not in next_steps
+
+
+def test_stage_j_docs_use_paper_consistent_candidate_as_active_target() -> None:
+    route_text = Path("docs/阶段J_论文一致部署路线说明.md").read_text(encoding="utf-8")
+    main_text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
+    readme_text = Path("README.md").read_text(encoding="utf-8")
+    assert "artifacts/stage_j_qwen_paper_consistent" in route_text
+    assert "artifacts/stage_j_qwen_paper_consistent" in readme_text
+    assert "outputs/stage_j/paper_consistent/completion_summary.json" in main_text
+
+
+def test_stage_j_docs_demote_historical_bridge_to_auxiliary_evidence() -> None:
+    route_text = Path("docs/阶段J_论文一致部署路线说明.md").read_text(encoding="utf-8")
+    assert "历史中间线" in route_text
+    assert "artifacts/stage_j_qwen_redesign_standard" in route_text
