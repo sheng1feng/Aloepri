@@ -11,5 +11,16 @@ def build_stage_j_paper_consistent_target() -> dict[str, Any]:
         "standard_visible_keys_required": True,
         "bridge_is_final_target": False,
         "buffered_reference": "artifacts/stage_j_qwen_redesign",
-        "standard_visible_bridge": "artifacts/stage_j_qwen_redesign_standard",
+        "historical_bridge_dir": "artifacts/stage_j_qwen_redesign_standard",
+        "canonical_candidate_dir": "artifacts/stage_j_qwen_paper_consistent",
+        "evidence_dir": "outputs/stage_j/paper_consistent",
+        "required_evidence_files": [
+            "standard_weight_proof.json",
+            "attention_export_visible_proof.json",
+            "ffn_export_visible_proof.json",
+            "norm_export_visible_proof.json",
+            "correctness_regression.json",
+            "completion_summary.json",
+        ],
+        "completion_statuses": ["export_visible_complete", "not_complete"],
     }
