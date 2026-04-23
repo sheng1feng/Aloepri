@@ -1,5 +1,7 @@
 # 阶段 K：Qwen 交付包装报告
 
+> Canonical note: 本文档只回答当前 `Stage K` 的状态，不承担全局主线说明。Qwen 唯一主线入口见 `docs/论文一致最终部署主线.md`。
+
 ## 1. 新阶段目标
 
 新版 `Stage K` 不再默认包装旧 `stage_j_full_square*`，而是包装：
