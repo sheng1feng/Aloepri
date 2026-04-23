@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -18,7 +19,6 @@ def test_readme_uses_canonical_qwen_header_once() -> None:
 
 
 def test_canonical_stage_reports_are_stage_local() -> None:
-    main_path = "docs/论文一致最终部署主线.md"
     for path in [
         "docs/阶段H_Qwen可部署混淆表达重构报告.md",
         "docs/阶段I_部署约束验证报告.md",
@@ -27,4 +27,7 @@ def test_canonical_stage_reports_are_stage_local() -> None:
     ]:
         text = Path(path).read_text(encoding="utf-8")
         assert "不承担全局主线说明" in text
-        assert main_path in text
+        assert re.search(
+            r"\[[^\]]*论文一致最终部署主线\.md[^\]]*\]\((?:\./)?(?:docs/)?论文一致最终部署主线\.md\)",
+            text,
+        )
