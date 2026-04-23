@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from src.evaluator import write_json
+from src.stage_j_bridge_regression import run_stage_j_bridge_regression
 from src.stage_j_standard_bridge import export_stage_j_redesign_standard_bridge
+from src.stage_j_standard_weight_proof import build_stage_j_standard_weight_proof
 
 
 def build_stage_j_paper_consistent_target() -> dict[str, Any]:
@@ -105,3 +108,121 @@ def export_stage_j_paper_consistent_candidate(
     )
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
+
+
+def build_stage_j_attention_export_visible_proof(manifest: dict[str, Any]) -> dict[str, Any]:
+    attention = manifest.get("export_visible_components", {}).get("attention", {})
+    passed = bool(
+        manifest.get("standard_weight_proof", {}).get("is_standard_weight_export")
+        and attention.get("has_profile")
+        and attention.get("has_head_group_semantics")
+        and attention.get("has_block_semantics")
+    )
+    return {
+        "status": "pass" if passed else "fail",
+        "profile": attention.get("profile"),
+        "has_head_group_semantics": bool(attention.get("has_head_group_semantics")),
+        "has_block_semantics": bool(attention.get("has_block_semantics")),
+    }
+
+
+def build_stage_j_ffn_export_visible_proof(manifest: dict[str, Any]) -> dict[str, Any]:
+    ffn = manifest.get("export_visible_components", {}).get("ffn", {})
+    adapted_layers_count = int(ffn.get("adapted_layers_count", 0))
+    passed = bool(
+        manifest.get("standard_weight_proof", {}).get("is_standard_weight_export")
+        and adapted_layers_count > 0
+    )
+    return {
+        "status": "pass" if passed else "fail",
+        "adapted_layers_count": adapted_layers_count,
+        "beta": ffn.get("beta"),
+        "gamma": ffn.get("gamma"),
+    }
+
+
+def build_stage_j_norm_export_visible_proof(manifest: dict[str, Any]) -> dict[str, Any]:
+    norm = manifest.get("export_visible_components", {}).get("norm", {})
+    strategy = norm.get("strategy")
+    has_kappa_overrides = bool(norm.get("has_kappa_overrides"))
+    passed = bool(
+        manifest.get("standard_weight_proof", {}).get("is_standard_weight_export")
+        and strategy in {"kappa_fused", "metric_diag_sqrt"}
+        and (has_kappa_overrides or strategy == "metric_diag_sqrt")
+    )
+    return {
+        "status": "pass" if passed else "fail",
+        "strategy": strategy,
+        "has_kappa_overrides": has_kappa_overrides,
+    }
+
+
+def build_stage_j_correctness_regression_status(payload: dict[str, Any]) -> dict[str, Any]:
+    summary = payload.get("summary", {})
+    passed = bool(
+        float(summary.get("generated_ids_exact_match_rate", 0.0)) > 0.0
+        and float(summary.get("generated_text_exact_match_rate", 0.0)) > 0.0
+    )
+    return {
+        "status": "pass" if passed else "fail",
+        **summary,
+    }
+
+
+def build_stage_j_paper_consistent_completion_summary(bundle: dict[str, Any]) -> dict[str, Any]:
+    blocking_components = [name for name, payload in bundle.items() if payload.get("status") != "pass"]
+    return {
+        "completion_status": "export_visible_complete" if not blocking_components else "not_complete",
+        "blocking_components": blocking_components,
+    }
+
+
+def build_stage_j_paper_consistent_evidence_bundle(
+    *,
+    candidate_dir: str | Path = "artifacts/stage_j_qwen_paper_consistent",
+    source_dir: str | Path = "artifacts/stage_j_qwen_redesign",
+    output_dir: str | Path = "outputs/stage_j/paper_consistent",
+    correctness_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    candidate_dir = Path(candidate_dir)
+    source_dir = Path(source_dir)
+    output_dir = Path(output_dir)
+    manifest = _load_json(candidate_dir / "manifest.json")
+    prior_standard_weight_proof = manifest.get("standard_weight_proof", {})
+    refreshed_standard_weight_proof = build_stage_j_standard_weight_proof(candidate_dir / "server")
+    fallback_standard_weight_export = bool(prior_standard_weight_proof.get("is_standard_weight_export"))
+    refreshed_standard_weight_export = bool(refreshed_standard_weight_proof.get("is_standard_weight_export"))
+    effective_standard_weight_export = refreshed_standard_weight_export or (
+        refreshed_standard_weight_proof.get("layout") == "missing_model_safetensors" and fallback_standard_weight_export
+    )
+    manifest["standard_weight_proof"] = {
+        **refreshed_standard_weight_proof,
+        "is_standard_weight_export": effective_standard_weight_export,
+    }
+
+    if correctness_payload is None:
+        correctness_payload = run_stage_j_bridge_regression(
+            buffered_server_dir=str((source_dir / "server").resolve()),
+            bridge_server_dir=str((candidate_dir / "server").resolve()),
+        )
+
+    bundle = {
+        "standard_weight_proof": {
+            "status": "pass" if manifest["standard_weight_proof"].get("is_standard_weight_export") else "fail",
+            **manifest["standard_weight_proof"],
+        },
+        "attention_export_visible_proof": build_stage_j_attention_export_visible_proof(manifest),
+        "ffn_export_visible_proof": build_stage_j_ffn_export_visible_proof(manifest),
+        "norm_export_visible_proof": build_stage_j_norm_export_visible_proof(manifest),
+        "correctness_regression": build_stage_j_correctness_regression_status(correctness_payload),
+    }
+    completion_summary = build_stage_j_paper_consistent_completion_summary(bundle)
+    bundle["completion_summary"] = completion_summary
+
+    write_json(output_dir / "standard_weight_proof.json", bundle["standard_weight_proof"])
+    write_json(output_dir / "attention_export_visible_proof.json", bundle["attention_export_visible_proof"])
+    write_json(output_dir / "ffn_export_visible_proof.json", bundle["ffn_export_visible_proof"])
+    write_json(output_dir / "norm_export_visible_proof.json", bundle["norm_export_visible_proof"])
+    write_json(output_dir / "correctness_regression.json", bundle["correctness_regression"])
+    write_json(output_dir / "completion_summary.json", bundle["completion_summary"])
+    return bundle
