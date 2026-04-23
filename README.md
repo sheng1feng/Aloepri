@@ -177,6 +177,9 @@ Stage K 额外提供：
 - Stage I：[`docs/阶段I_部署约束验证报告.md`](docs/阶段I_部署约束验证报告.md)
 - Stage J：[`docs/阶段J_论文一致部署路线说明.md`](docs/阶段J_论文一致部署路线说明.md)
 - Stage K：[`docs/阶段K_Qwen交付包装报告.md`](docs/阶段K_Qwen交付包装报告.md)
+- 证据：[`docs/阶段H-K论文对齐检查表.md`](docs/阶段H-K论文对齐检查表.md)
+- 证据：[`docs/qwen_security/Qwen安全总报告.md`](docs/qwen_security/Qwen安全总报告.md)
+- 证据：[`docs/AloePri 论文中的部署适配机制整理.md`](docs/AloePri%20论文中的部署适配机制整理.md)
 
 ---
 
