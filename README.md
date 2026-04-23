@@ -13,19 +13,13 @@
 
 > **Stage J 解决“混淆后的模型能不能保持标准 HF 形状并恢复功能”，Stage K 解决“这些工件能不能被整理成可交付、可选 profile、可直接推理的发布目录”。**
 
-## Qwen Stage H-K redesign
+## Qwen 论文一致最终部署主线
 
-当前仓库正在把 Qwen 的 `Stage H/I/J/K` 从“保守 standard-shape 部署线”重构为“更贴近论文部署适配机制的可部署主线”。
+当前 Qwen 文档只保留一条主线：
 
-需要区分两套语义：
+- [`docs/论文一致最终部署主线.md`](docs/论文一致最终部署主线.md)
 
-- legacy conservative `Stage H/I/J/K` artifacts
-- redesigned paper-aligned Qwen `Stage H/I/J/K`
-
-迁移入口见：
-
-- [`docs/阶段H-K重构迁移说明.md`](docs/阶段H-K重构迁移说明.md)
-- [`docs/superpowers/specs/2026-04-14-qwen-stage-hk-redesign-design.md`](docs/superpowers/specs/2026-04-14-qwen-stage-hk-redesign-design.md)
+legacy conservative `Stage H/I/J/K`、buffered redesign、standard-visible bridge 都不再作为并列进度线出现，而只作为证据或历史参考保留。
 
 ---
 
@@ -176,12 +170,13 @@ Stage K 额外提供：
 - 云端验证说明：[`docs/Llama-3.2-3B云端验证说明.md`](docs/Llama-3.2-3B云端验证说明.md)
 - 噪声定标与 Stage K 推进说明：[`docs/Llama-3.2-3B噪声定标与StageK推进说明.md`](docs/Llama-3.2-3B噪声定标与StageK推进说明.md)
 
-### 关键阶段文档
+### Qwen 主线
 
-- Stage I：[`docs/阶段I_vLLM复现报告.md`](docs/阶段I_vLLM复现报告.md)
-- Stage J：[`docs/阶段J_标准形状前缀恢复报告.md`](docs/阶段J_标准形状前缀恢复报告.md)
-- Stage J 噪声：[`docs/阶段J_标准形状噪声定标报告.md`](docs/阶段J_标准形状噪声定标报告.md)
-- Stage K：[`docs/阶段K_标准形状交付包装报告.md`](docs/阶段K_标准形状交付包装报告.md)
+- 主线总入口：[`docs/论文一致最终部署主线.md`](docs/论文一致最终部署主线.md)
+- Stage H：[`docs/阶段H_Qwen可部署混淆表达重构报告.md`](docs/阶段H_Qwen可部署混淆表达重构报告.md)
+- Stage I：[`docs/阶段I_部署约束验证报告.md`](docs/阶段I_部署约束验证报告.md)
+- Stage J：[`docs/阶段J_论文一致部署路线说明.md`](docs/阶段J_论文一致部署路线说明.md)
+- Stage K：[`docs/阶段K_Qwen交付包装报告.md`](docs/阶段K_Qwen交付包装报告.md)
 
 ---
 

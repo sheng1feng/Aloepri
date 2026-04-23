@@ -1,0 +1,12 @@
+from pathlib import Path
+
+
+def test_canonical_qwen_deployment_doc_exists() -> None:
+    assert Path("docs/论文一致最终部署主线.md").exists()
+
+
+def test_readme_uses_single_qwen_deployment_entry() -> None:
+    text = Path("README.md").read_text(encoding="utf-8")
+    assert "docs/论文一致最终部署主线.md" in text
+    assert "Qwen Stage H-K redesign" not in text
+    assert "docs/阶段H-K重构迁移说明.md" not in text
