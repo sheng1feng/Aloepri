@@ -10,10 +10,10 @@ from src.security_qwen import (
 )
 
 
-def test_resolve_security_target_maps_stage_k_profile_to_profile_dir() -> None:
-    resolved = resolve_security_target("stage_k_stable_reference")
-    assert resolved.profile == "stable_reference"
-    assert resolved.resolved_root_dir.endswith("artifacts/stage_k_release/profiles/stable_reference")
+def test_resolve_security_target_maps_stage_k_default_profile_to_profile_dir() -> None:
+    resolved = resolve_security_target("stage_k_default")
+    assert resolved.profile == "default"
+    assert resolved.resolved_root_dir.endswith("artifacts/stage_k_release/profiles/default")
     assert resolved.server_dir is not None and resolved.server_dir.endswith("/server")
     assert resolved.client_secret_path is not None and resolved.client_secret_path.endswith("client_secret.pt")
 
@@ -34,9 +34,9 @@ def test_resolve_security_target_maps_gate6_artifact() -> None:
 
 def test_security_summary_collects_template_results(tmp_path: Path) -> None:
     vma_target = get_security_target("stage_j_stable_reference").to_target()
-    tfma_target = get_security_target("stage_k_tiny_a").to_target()
+    tfma_target = get_security_target("stage_k_default").to_target()
     vma_path = tmp_path / "vma" / "stage_j_stable_reference.template.json"
-    tfma_path = tmp_path / "tfma" / "stage_k_tiny_a.template.json"
+    tfma_path = tmp_path / "tfma" / "stage_k_default.template.json"
     vma_path.parent.mkdir(parents=True, exist_ok=True)
     tfma_path.parent.mkdir(parents=True, exist_ok=True)
     vma_path.write_text(json.dumps(build_vma_template(vma_target), ensure_ascii=False, indent=2), encoding="utf-8")

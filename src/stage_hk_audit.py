@@ -14,7 +14,8 @@ def _load_json(path: str | Path) -> dict[str, Any]:
 
 def build_redesigned_expression_audit() -> dict[str, Any]:
     stage_h_cfg = _load_json("artifacts/stage_h_pretrained/server/obfuscation_config.json")
-    stage_j_manifest = _load_json("artifacts/stage_j_qwen_redesign/manifest.json")
+    stage_j_manifest = _load_json("artifacts/stage_j_qwen_paper_consistent/manifest.json")
+    stage_j_completion = _load_json("outputs/stage_j/paper_consistent/completion_summary.json")
     stage_k_catalog = _load_json("artifacts/stage_k_release/catalog.json")
 
     profiles = [item for item in stage_k_catalog.get("profiles", []) if isinstance(item, dict)]
@@ -31,17 +32,18 @@ def build_redesigned_expression_audit() -> dict[str, Any]:
     }
 
     stage_j = {
-        "bootstraps_from_stage_h_pretrained": stage_j_manifest.get("bootstrap_source") == "artifacts/stage_h_pretrained",
-        "source_stages": stage_j_manifest.get("source_stages", []),
-        "has_component_level_expression_manifest": "component_expression" in stage_j_manifest,
-        "has_standard_weight_key_layout": False,
-        "server_dir_present": Path("artifacts/stage_j_qwen_redesign/server").exists(),
-        "client_dir_present": Path("artifacts/stage_j_qwen_redesign/client").exists(),
+        "candidate_dir": "artifacts/stage_j_qwen_paper_consistent",
+        "bootstraps_from_stage_h_pretrained": stage_j_manifest.get("buffered_source_of_truth") == "artifacts/stage_j_qwen_redesign",
+        "has_component_level_expression_manifest": "export_visible_components" in stage_j_manifest,
+        "has_standard_weight_key_layout": bool(stage_j_manifest.get("standard_weight_proof", {}).get("is_standard_weight_export")),
+        "completion_status": stage_j_completion.get("completion_status"),
+        "server_dir_present": Path("artifacts/stage_j_qwen_paper_consistent/server").exists(),
+        "client_dir_present": Path("artifacts/stage_j_qwen_paper_consistent/client").exists(),
     }
 
     stage_k = {
-        "points_to_redesigned_stage_j": stage_k_catalog.get("stage_lineage") == "redesigned_qwen_stage_j"
-        and all(source == "artifacts/stage_j_qwen_redesign" for source in profile_sources),
+        "points_to_paper_consistent_stage_j": stage_k_catalog.get("stage_lineage") == "paper_consistent_stage_j"
+        and all(source == "artifacts/stage_j_qwen_paper_consistent" for source in profile_sources),
         "profile_sources": profile_sources,
         "has_expression_metadata_in_catalog": any("manifest" in item for item in profiles),
     }
@@ -49,15 +51,16 @@ def build_redesigned_expression_audit() -> dict[str, Any]:
     verdict = {
         "expression_enters_bootstrap_source": stage_h_source["attention_profile_present"] and stage_h_source["keymat_parameters_present"],
         "expression_manifest_exists_in_stage_j_export": stage_j["has_component_level_expression_manifest"],
-        "expression_is_proven_in_stage_j_export": stage_j["has_component_level_expression_manifest"] and stage_j["has_standard_weight_key_layout"],
+        "expression_is_proven_in_stage_j_export": stage_j["has_standard_weight_key_layout"]
+        and stage_j["completion_status"] == "export_visible_complete",
         "expression_is_carried_into_stage_k_release": stage_k["has_expression_metadata_in_catalog"],
     }
 
     summary = {
-        "status": "bootstrap_expression_present_manifest_added_but_standard_weight_proof_still_missing"
-        if verdict["expression_enters_bootstrap_source"] and not verdict["expression_is_proven_in_stage_j_export"]
+        "status": "paper_consistent_release_ready"
+        if verdict["expression_is_proven_in_stage_j_export"] and stage_k["points_to_paper_consistent_stage_j"]
         else "expression_audit_inconclusive",
-        "next_action": "materialize_standard_weight_visible_expression_proof_and_then_re-run_vma",
+        "next_action": "re-run correctness and security evaluations on the paper-consistent release surface",
     }
 
     return {

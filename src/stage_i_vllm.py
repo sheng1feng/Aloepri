@@ -241,10 +241,16 @@ def build_stage_i_boundary_audit() -> dict[str, Any]:
         "custom_online_operator_required": False,
         "compatible_target_surfaces": ["transformers", "vllm", "sglang"],
         "exported_artifact_has_attention_manifest": bool(expression_audit["stage_j"]["has_component_level_expression_manifest"]),
-        "exported_artifact_proves_attention_expression": bool(expression_audit["stage_j"]["has_standard_weight_key_layout"]),
-        "exported_artifact_proves_ffn_expression": False,
-        "exported_artifact_proves_norm_expression": False,
-        "release_catalog_carries_redesign_lineage": bool(
-            expression_audit["stage_k"]["points_to_redesigned_stage_j"]
+        "exported_artifact_proves_attention_expression": bool(
+            expression_audit["stage_j"]["completion_status"] == "export_visible_complete"
+        ),
+        "exported_artifact_proves_ffn_expression": bool(
+            expression_audit["stage_j"]["completion_status"] == "export_visible_complete"
+        ),
+        "exported_artifact_proves_norm_expression": bool(
+            expression_audit["stage_j"]["completion_status"] == "export_visible_complete"
+        ),
+        "release_catalog_carries_paper_consistent_lineage": bool(
+            expression_audit["stage_k"]["points_to_paper_consistent_stage_j"]
         ),
     }

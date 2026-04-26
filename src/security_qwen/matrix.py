@@ -19,8 +19,8 @@ def security_matrix_payload() -> dict[str, Any]:
                     targets["stage_h_full_obfuscated"].name,
                     targets["stage_j_stable_reference"].name,
                     targets["stage_j_tiny_a"].name,
-                    targets["stage_k_stable_reference"].name,
-                    targets["stage_k_tiny_a"].name,
+                    targets["stage_k_reference"].name,
+                    targets["stage_k_default"].name,
                 ],
             },
             "training_inversion_attacks": {
@@ -39,8 +39,8 @@ def security_matrix_payload() -> dict[str, Any]:
                     targets["stage_h_full_obfuscated"].name,
                     targets["stage_j_stable_reference"].name,
                     targets["stage_j_tiny_a"].name,
-                    targets["stage_k_stable_reference"].name,
-                    targets["stage_k_tiny_a"].name,
+                    targets["stage_k_reference"].name,
+                    targets["stage_k_default"].name,
                 ],
             },
             "online_frequency_attacks": {
@@ -49,8 +49,8 @@ def security_matrix_payload() -> dict[str, Any]:
                 "targets": [
                     targets["stage_j_stable_reference"].name,
                     targets["stage_j_tiny_a"].name,
-                    targets["stage_k_stable_reference"].name,
-                    targets["stage_k_tiny_a"].name,
+                    targets["stage_k_reference"].name,
+                    targets["stage_k_default"].name,
                 ],
             },
         },

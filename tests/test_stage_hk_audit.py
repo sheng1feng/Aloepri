@@ -7,13 +7,14 @@ def test_redesigned_expression_audit_detects_stage_h_bootstrap_expression() -> N
     assert payload["stage_h_source"]["keymat_parameters_present"] is True
 
 
-def test_redesigned_expression_audit_marks_stage_j_as_bootstrap_not_full_proof() -> None:
+def test_redesigned_expression_audit_marks_stage_j_as_paper_consistent_standard_export() -> None:
     payload = build_redesigned_expression_audit()
-    assert payload["stage_j"]["bootstraps_from_stage_h_pretrained"] is True
+    assert payload["stage_j"]["candidate_dir"] == "artifacts/stage_j_qwen_paper_consistent"
     assert payload["stage_j"]["has_component_level_expression_manifest"] is True
-    assert payload["stage_j"]["has_standard_weight_key_layout"] is False
+    assert payload["stage_j"]["has_standard_weight_key_layout"] is True
+    assert payload["stage_j"]["completion_status"] == "export_visible_complete"
 
 
-def test_redesigned_expression_audit_marks_stage_k_as_redesign_packaging() -> None:
+def test_redesigned_expression_audit_marks_stage_k_as_paper_consistent_packaging() -> None:
     payload = build_redesigned_expression_audit()
-    assert payload["stage_k"]["points_to_redesigned_stage_j"] is True
+    assert payload["stage_k"]["points_to_paper_consistent_stage_j"] is True

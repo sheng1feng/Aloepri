@@ -42,17 +42,17 @@ def main() -> None:
         ),
         (
             "tfma",
-            "stage_k_stable_reference",
+            "stage_k_reference",
             build_tfma_template(
-                get_security_target("stage_k_stable_reference").to_target(),
+                get_security_target("stage_k_reference").to_target(),
                 knowledge_setting="zero_knowledge",
             ),
         ),
         (
             "sda",
-            "stage_k_tiny_a",
+            "stage_k_default",
             build_sda_template(
-                get_security_target("stage_k_tiny_a").to_target(),
+                get_security_target("stage_k_default").to_target(),
                 knowledge_setting="domain_aware",
             ),
         ),

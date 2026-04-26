@@ -40,8 +40,8 @@ def default_ima_gate2_targets() -> list[str]:
         "stage_h_full_obfuscated",
         "stage_j_stable_reference",
         "stage_j_tiny_a",
-        "stage_k_stable_reference",
-        "stage_k_tiny_a",
+        "stage_k_reference",
+        "stage_k_default",
     ]
 
 
