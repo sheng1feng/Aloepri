@@ -18,7 +18,7 @@ from src.transforms import map_input_ids, restore_logits
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Infer from a Stage-K release profile.")
     parser.add_argument("--release-dir", default="artifacts/stage_k_release")
-    parser.add_argument("--profile", default="tiny_a")
+    parser.add_argument("--profile", default="default")
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--max-new-tokens", type=int, default=16)
     parser.add_argument("--dtype", default="float32")

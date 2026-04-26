@@ -34,6 +34,6 @@ def export_stage_k_llama_release(
         profiles=default_stage_k_llama_profiles(),
         materialize=materialize,
         recommended_profile="tiny_a",
-        stable_reference_profile="stable_reference",
-        title="Stage-K Llama Standard-Shape Release",
+        reference_profile="stable_reference",
+        title="Stage-K Llama Release",
     )

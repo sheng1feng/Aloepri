@@ -19,18 +19,18 @@ class StageKProfile:
 def default_stage_k_profiles() -> list[StageKProfile]:
     return [
         StageKProfile(
-            name="stable_reference",
-            source_dir="artifacts/stage_j_qwen_redesign",
-            description="Bootstrap redesigned Stage-J Qwen artifact used as the stable reference release profile.",
-            recommended_use="Redesigned-line baseline, packaging verification, lineage debugging.",
-            regression_file="outputs/stage_j/redesign_regression.json",
+            name="default",
+            source_dir="artifacts/stage_j_qwen_paper_consistent",
+            description="Default paper-consistent Stage-J Qwen release profile.",
+            recommended_use="Default delivery entry for the paper-consistent Qwen deployment line.",
+            regression_file="outputs/stage_j/paper_consistent/completion_summary.json",
         ),
         StageKProfile(
-            name="tiny_a",
-            source_dir="artifacts/stage_j_qwen_redesign",
-            description="Default release alias for the redesigned Qwen deployment line.",
-            recommended_use="Default delivery entry for the redesigned line until differentiated redesign profiles are added.",
-            regression_file="outputs/stage_j/redesign_regression.json",
+            name="reference",
+            source_dir="artifacts/stage_j_qwen_paper_consistent",
+            description="Reference paper-consistent Stage-J Qwen release profile.",
+            recommended_use="Audit and evidence entry for the same paper-consistent deployment line.",
+            regression_file="outputs/stage_j/paper_consistent/completion_summary.json",
         ),
     ]
 
@@ -79,9 +79,9 @@ def export_stage_k_release(
     *,
     profiles: list[StageKProfile] | None = None,
     materialize: bool = False,
-    recommended_profile: str = "tiny_a",
-    stable_reference_profile: str = "stable_reference",
-    title: str = "Stage-K Redesigned Qwen Release",
+    recommended_profile: str = "default",
+    reference_profile: str = "reference",
+    title: str = "Stage-K Paper-Consistent Qwen Release",
 ) -> dict[str, Any]:
     export_dir = Path(export_dir)
     profiles_dir = export_dir / "profiles"
@@ -99,12 +99,12 @@ def export_stage_k_release(
 
     catalog = {
         "format": "stage_k_release_v1",
-        "stage_lineage": "redesigned_qwen_stage_j",
+        "stage_lineage": "paper_consistent_stage_j",
         "materialized": bool(materialize),
         "profiles_dir": "profiles",
         "profiles": profile_summaries,
         "recommended_profile": recommended_profile,
-        "stable_reference_profile": stable_reference_profile,
+        "reference_profile": reference_profile,
     }
     (export_dir / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -123,7 +123,7 @@ def export_stage_k_release(
     readme = [
         f"# {title}",
         "",
-        "This bundle collects the redesigned Qwen deployment-line artifacts.",
+        "This bundle collects the paper-consistent Qwen deployment-line artifacts.",
         "",
         "Profiles:",
     ]
