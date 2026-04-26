@@ -84,6 +84,7 @@ def test_stage_j_docs_use_paper_consistent_candidate_as_active_target() -> None:
     assert "artifacts/stage_j_qwen_paper_consistent" in route_text
     assert "artifacts/stage_j_qwen_paper_consistent" in readme_text
     assert "outputs/stage_j/paper_consistent/completion_summary.json" in main_text
+    assert "outputs/stage_j/paper_consistent/correctness_regression.json" in main_text
 
 
 def test_stage_j_docs_demote_historical_bridge_to_auxiliary_evidence() -> None:
@@ -98,9 +99,11 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     readme_text = Path("README.md").read_text(encoding="utf-8")
     assert "artifacts/stage_k_release" in stage_k_text
     assert "artifacts/stage_j_qwen_paper_consistent" in stage_k_text
+    assert "outputs/stage_j/paper_consistent/correctness_regression.json" in stage_k_text
     assert "`default`" in stage_k_text
     assert "`reference`" in stage_k_text
     assert "artifacts/stage_k_release" in main_text
+    assert "outputs/stage_j/paper_consistent/correctness_regression.json" in main_text
     assert "artifacts/stage_k_release" in readme_text
 
 

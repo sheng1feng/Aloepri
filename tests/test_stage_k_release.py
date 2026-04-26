@@ -27,6 +27,14 @@ def test_stage_k_profiles_point_to_paper_consistent_stage_j() -> None:
     assert all(item.source_dir == "artifacts/stage_j_qwen_paper_consistent" for item in profiles)
 
 
+def test_stage_k_profiles_point_to_paper_consistent_correctness_evidence() -> None:
+    profiles = default_stage_k_profiles()
+    assert all(
+        item.correctness_evidence_file == "outputs/stage_j/paper_consistent/correctness_regression.json"
+        for item in profiles
+    )
+
+
 def test_infer_stage_k_release_defaults_to_default_profile(monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
@@ -39,6 +47,14 @@ def test_infer_stage_k_release_defaults_to_default_profile(monkeypatch) -> None:
 def test_export_stage_k_release_writes_paper_consistent_catalog(tmp_path: Path) -> None:
     source_dir = tmp_path / "stage_j_qwen_paper_consistent"
     _make_stage_k_source(source_dir)
+    correctness_path = tmp_path / "correctness_regression.json"
+    correctness_payload = {
+        "status": "pass",
+        "prompt_count": 5,
+        "generated_ids_exact_match_rate": 0.2,
+        "generated_text_exact_match_rate": 0.2,
+    }
+    correctness_path.write_text(json.dumps(correctness_payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     export_dir = tmp_path / "stage_k_release"
     catalog = export_stage_k_release(
@@ -49,12 +65,14 @@ def test_export_stage_k_release_writes_paper_consistent_catalog(tmp_path: Path) 
                 source_dir=str(source_dir),
                 description="Default paper-consistent delivery profile.",
                 recommended_use="Default delivery entry for the paper-consistent release line.",
+                correctness_evidence_file=str(correctness_path),
             ),
             StageKProfile(
                 name="reference",
                 source_dir=str(source_dir),
                 description="Reference paper-consistent audit profile.",
                 recommended_use="Audit and evidence entry for the same paper-consistent release line.",
+                correctness_evidence_file=str(correctness_path),
             ),
         ],
         recommended_profile="default",
@@ -66,3 +84,12 @@ def test_export_stage_k_release_writes_paper_consistent_catalog(tmp_path: Path) 
     assert catalog["recommended_profile"] == "default"
     assert catalog["reference_profile"] == "reference"
     assert [item["name"] for item in catalog["profiles"]] == ["default", "reference"]
+    assert all(
+        item["correctness_evidence_file"] == str(correctness_path)
+        for item in catalog["profiles"]
+    )
+    assert all(item["correctness_summary"] == correctness_payload for item in catalog["profiles"])
+
+    readme_text = (export_dir / "README.md").read_text(encoding="utf-8")
+    assert "Correctness evidence: status=pass" in readme_text
+    assert "gen_ids_match=0.2" in readme_text

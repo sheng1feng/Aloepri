@@ -33,6 +33,12 @@
 - 提供统一推理入口
 - 把 `Stage J` 的论文一致候选工件收口成唯一发布面
 
+当前 `Stage K` 的活跃 correctness 证据直接继承自唯一 `paper_consistent` 候选：
+
+- `outputs/stage_j/paper_consistent/correctness_regression.json`
+
+`outputs/stage_j/paper_consistent/completion_summary.json` 只表示 `Stage J` 是否达到 export-visible completion，不再作为 `Stage K` 的 correctness 证据解释。
+
 ## 4. 与历史 Stage K 的关系
 
 旧版 `Stage K` 命名与旧 profile 语义仅作为历史证据保留，不再代表当前唯一论文部署线发布面。

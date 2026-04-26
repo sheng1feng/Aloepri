@@ -13,7 +13,7 @@ class StageKProfile:
     source_dir: str
     description: str
     recommended_use: str
-    regression_file: str | None = None
+    correctness_evidence_file: str | None = None
 
 
 def default_stage_k_profiles() -> list[StageKProfile]:
@@ -23,14 +23,14 @@ def default_stage_k_profiles() -> list[StageKProfile]:
             source_dir="artifacts/stage_j_qwen_paper_consistent",
             description="Default paper-consistent Stage-J Qwen release profile.",
             recommended_use="Default delivery entry for the paper-consistent Qwen deployment line.",
-            regression_file="outputs/stage_j/paper_consistent/completion_summary.json",
+            correctness_evidence_file="outputs/stage_j/paper_consistent/correctness_regression.json",
         ),
         StageKProfile(
             name="reference",
             source_dir="artifacts/stage_j_qwen_paper_consistent",
             description="Reference paper-consistent Stage-J Qwen release profile.",
             recommended_use="Audit and evidence entry for the same paper-consistent deployment line.",
-            regression_file="outputs/stage_j/paper_consistent/completion_summary.json",
+            correctness_evidence_file="outputs/stage_j/paper_consistent/correctness_regression.json",
         ),
     ]
 
@@ -44,11 +44,11 @@ def _load_json(path: Path) -> dict[str, Any]:
 def _profile_summary(profile: StageKProfile, source_dir: Path) -> dict[str, Any]:
     metadata = _load_json(source_dir / "stage_i_metadata.json")
     manifest = _load_json(source_dir / "manifest.json")
-    regression = {}
-    if profile.regression_file is not None:
-        candidate = Path(profile.regression_file)
+    correctness = {}
+    if profile.correctness_evidence_file is not None:
+        candidate = Path(profile.correctness_evidence_file)
         if candidate.exists():
-            regression = _load_json(candidate)
+            correctness = _load_json(candidate)
     return {
         "name": profile.name,
         "description": profile.description,
@@ -58,7 +58,8 @@ def _profile_summary(profile: StageKProfile, source_dir: Path) -> dict[str, Any]
         "client_secret": f"profiles/{profile.name}/client/client_secret.pt",
         "metadata": metadata,
         "manifest": manifest,
-        "regression_summary": regression.get("summary", {}),
+        "correctness_evidence_file": profile.correctness_evidence_file,
+        "correctness_summary": correctness,
     }
 
 
@@ -130,11 +131,12 @@ def export_stage_k_release(
     for item in profile_summaries:
         readme.append(f"- `{item['name']}`: {item['description']}")
         readme.append(f"  - Recommended use: {item['recommended_use']}")
-        summary = item.get("regression_summary", {})
+        summary = item.get("correctness_summary", {})
         if summary:
             readme.append(
-                f"  - HF regression: logits_max={summary.get('avg_full_logits_max_abs_error')}, "
-                f"gen_ids_match={summary.get('generated_ids_exact_match_rate')}"
+                f"  - Correctness evidence: status={summary.get('status')}, "
+                f"gen_ids_match={summary.get('generated_ids_exact_match_rate')}, "
+                f"gen_text_match={summary.get('generated_text_exact_match_rate')}"
             )
     readme.append("")
     readme.append("Use `scripts/infer_stage_k_release.py` to run inference by profile name.")
