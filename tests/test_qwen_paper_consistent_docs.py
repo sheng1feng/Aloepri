@@ -59,11 +59,11 @@ def test_redundant_stage_j_docs_removed() -> None:
 
 
 def test_security_docs_are_subordinate_to_main_line() -> None:
-    index_text = Path("docs/qwen_security/README.md").read_text(encoding="utf-8")
-    board_text = Path("docs/qwen_security/推进看板.md").read_text(encoding="utf-8")
+    index_text = Path("docs/history/security/qwen_security/README.md").read_text(encoding="utf-8")
+    board_text = Path("docs/history/security/qwen_security/推进看板.md").read_text(encoding="utf-8")
     assert "不是 Qwen 部署主线入口" in index_text
     assert "仅跟踪安全子域" in board_text
-    canonical_link = "[docs/论文一致最终部署主线.md](../论文一致最终部署主线.md)"
+    canonical_link = "[docs/论文一致最终部署主线.md](../../../论文一致最终部署主线.md)"
     assert canonical_link in index_text
     assert canonical_link in board_text
 

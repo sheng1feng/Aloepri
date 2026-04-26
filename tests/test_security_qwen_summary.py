@@ -54,5 +54,5 @@ def test_security_summary_collects_template_results(tmp_path: Path) -> None:
 
 
 def test_qwen_security_total_report_mentions_legacy_conservative_deployment_line() -> None:
-    text = Path("docs/qwen_security/Qwen安全总报告.md").read_text(encoding="utf-8")
+    text = Path("docs/history/security/qwen_security/Qwen安全总报告.md").read_text(encoding="utf-8")
     assert "legacy conservative deployment line" in text
