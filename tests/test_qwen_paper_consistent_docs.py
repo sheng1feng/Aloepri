@@ -2,6 +2,32 @@ import re
 from pathlib import Path
 
 
+def _normalize_heading_title(title: str) -> str:
+    cleaned = re.sub(r"`", "", title).strip()
+    cleaned = re.sub(r"^\d+(?:\.\d+)*[.)]?\s*", "", cleaned)
+    return cleaned
+
+
+def _extract_section_by_heading(text: str, heading_title: str) -> str:
+    heading_pattern = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.M)
+    headings = list(heading_pattern.finditer(text))
+    target = _normalize_heading_title(heading_title)
+
+    for i, match in enumerate(headings):
+        level = len(match.group(1))
+        if _normalize_heading_title(match.group(2)) != target:
+            continue
+
+        start = match.end()
+        end = len(text)
+        for next_match in headings[i + 1 :]:
+            if len(next_match.group(1)) <= level:
+                end = next_match.start()
+                break
+        return text[start:end]
+    return ""
+
+
 def test_canonical_qwen_deployment_doc_exists() -> None:
     assert Path("docs/论文一致最终部署主线.md").exists()
 
@@ -70,9 +96,8 @@ def test_security_docs_are_subordinate_to_main_line() -> None:
 
 def test_mainline_doc_next_steps_are_real_remaining_work() -> None:
     text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
-    section = re.search(r"## 7\. 下一步顺序(.*?)## 8\.", text, re.S)
-    assert section is not None
-    next_steps = section.group(1)
+    next_steps = _extract_section_by_heading(text, "下一步顺序")
+    assert next_steps
 
     assert "唯一 release 面" in next_steps
     assert "correctness" in next_steps
@@ -129,9 +154,8 @@ def test_security_docs_move_to_history_tree() -> None:
 
 def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> None:
     text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
-    section = re.search(r"## 7\. 下一步顺序(.*?)## 8\.", text, re.S)
-    assert section is not None
-    next_steps = section.group(1)
+    next_steps = _extract_section_by_heading(text, "下一步顺序")
+    assert next_steps
     assert "唯一 release 面" in next_steps
     assert "correctness" in next_steps
     assert "`VMA / IMA / ISA`" in next_steps
@@ -140,10 +164,41 @@ def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> Non
 
 def test_qwen_mainline_doc_has_explicit_paper_gap_section() -> None:
     text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
-    assert "## 6. 与原始论文的当前差异" in text
-    assert "不能表述为“已经与论文完全等价”" in text
-    assert "`paper_consistent`" in text
-    assert "`VMA / IMA / ISA`" in text
+    section = _extract_section_by_heading(text, "与原始论文的当前差异")
+    assert section
+    assert "不能表述为“已经与论文完全等价”" in section
+    assert "`paper_consistent`" in section
+    assert "`VMA / IMA / ISA`" in section
+
+
+def test_qwen_mainline_doc_lists_executable_rerun_checklist() -> None:
+    text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
+    checklist = _extract_section_by_heading(text, "剩余复跑可执行清单")
+    assert checklist
+
+    assert "`artifacts/stage_k_release`" in checklist
+    assert "`default`" in checklist
+    assert "`reference`" in checklist
+    assert "`stage_k_default`" in checklist
+    assert "`stage_k_reference`" in checklist
+    assert "`scripts/export_stage_k_release.py`" in checklist
+    assert "`scripts/infer_stage_k_release.py`" in checklist
+    assert "`--prompt`" in checklist
+    assert "`scripts/security_qwen/run_vma.py`" in checklist
+    assert "`scripts/security_qwen/run_ima.py`" in checklist
+    assert "`scripts/security_qwen/run_isa.py`" in checklist
+    assert "`--target stage_k_default`" in checklist
+    assert "`--target stage_k_reference`" in checklist
+    assert "`--observable-type`" in checklist
+    assert "`outputs/stage_j/paper_consistent/correctness_regression.json`" in checklist
+    assert "当前 correctness 证据仍继承自 `Stage J`" in checklist
+    assert "还缺 `Stage K` 自身的 correctness 结果文件" in checklist
+    assert "`outputs/security_qwen/vma/stage_k_default.json`" in checklist
+    assert "`outputs/security_qwen/ima/stage_k_reference.json`" in checklist
+    assert "`outputs/security_qwen/isa/stage_k_default.hidden_state.json`" in checklist
+    assert "`hidden_state`" in checklist
+    assert "`attention_score`" in checklist
+    assert "不再是当前主线复跑对象" in checklist
 
 
 def test_llama_mainline_doc_lists_release_evidence_inputs() -> None:
