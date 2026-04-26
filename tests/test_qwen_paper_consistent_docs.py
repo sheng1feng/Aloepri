@@ -18,6 +18,13 @@ def test_readme_uses_single_qwen_deployment_entry() -> None:
     assert "artifacts/stage_k_release/" in text
 
 
+def test_readme_points_to_repository_and_dual_mainlines() -> None:
+    text = Path("README.md").read_text(encoding="utf-8")
+    assert "docs/复现主线总览.md" in text
+    assert "docs/论文一致最终部署主线.md" in text
+    assert "docs/Llama-3.2-3B最终部署主线.md" in text
+
+
 def test_readme_uses_canonical_qwen_header_once() -> None:
     text = Path("README.md").read_text(encoding="utf-8")
     assert text.count("## Qwen 论文一致最终部署主线") == 1
@@ -105,6 +112,19 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     assert "artifacts/stage_k_release" in main_text
     assert "outputs/stage_j/paper_consistent/correctness_regression.json" in main_text
     assert "artifacts/stage_k_release" in readme_text
+
+
+def test_llama_active_docs_are_rooted_under_llama_mainline() -> None:
+    text = Path("docs/Llama-3.2-3B最终部署主线.md").read_text(encoding="utf-8")
+    assert "docs/Llama-3.2-3B标准形状恢复报告.md" in text
+    assert "docs/Llama-3.2-3B噪声定标与StageK推进说明.md" in text
+    assert "docs/Llama-3.2-3B客户端与Server使用说明.md" in text
+    assert "docs/history/llama/Llama-3.2-3B快速使用说明.md" in text
+
+
+def test_security_docs_move_to_history_tree() -> None:
+    text = Path("docs/复现主线总览.md").read_text(encoding="utf-8")
+    assert "docs/history/security/qwen_security/" in text
 
 
 def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> None:
