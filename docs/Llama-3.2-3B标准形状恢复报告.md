@@ -1,3 +1,5 @@
+> Canonical note: 本文档只回答当前 `Llama-3.2-3B` 标准形状恢复与 correctness 证据，不承担全局主线说明。Llama 唯一主线入口见 [docs/Llama-3.2-3B最终部署主线.md](Llama-3.2-3B最终部署主线.md)。
+
 # Llama-3.2-3B 标准形状本机恢复报告
 
 本文档记录当前在**本机 CPU 环境**下，围绕 `Llama-3.2-3B` 所能完成的标准形状（standard-shape）接入与验证工作。

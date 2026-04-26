@@ -1,3 +1,5 @@
+> Canonical note: 本文档只回答当前 `Llama-3.2-3B` 的 client/server 使用方式，不承担全局主线说明。Llama 唯一主线入口见 [docs/Llama-3.2-3B最终部署主线.md](Llama-3.2-3B最终部署主线.md)。
+
 # Llama-3.2-3B 客户端与 Server 使用说明
 
 这份文档面向实际使用者，目标是：

@@ -1,3 +1,5 @@
+> Canonical note: 本文档只回答当前 `Llama-3.2-3B` 噪声定标与 `Stage K` 推进状态，不承担全局主线说明。Llama 唯一主线入口见 [docs/Llama-3.2-3B最终部署主线.md](Llama-3.2-3B最终部署主线.md)。
+
 # Llama-3.2-3B 噪声定标与 Stage K 推进说明
 
 本文档说明在 `Llama-3.2-3B` 已完成：
