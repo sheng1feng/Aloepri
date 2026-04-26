@@ -42,9 +42,9 @@
 
 Llama 主线当前只保留这 3 份活跃支撑文档：
 
-- [Llama-3.2-3B标准形状恢复报告.md](Llama-3.2-3B标准形状恢复报告.md)
-- [Llama-3.2-3B噪声定标与StageK推进说明.md](Llama-3.2-3B噪声定标与StageK推进说明.md)
-- [Llama-3.2-3B客户端与Server使用说明.md](Llama-3.2-3B客户端与Server使用说明.md)
+- [docs/Llama-3.2-3B标准形状恢复报告.md](Llama-3.2-3B标准形状恢复报告.md)
+- [docs/Llama-3.2-3B噪声定标与StageK推进说明.md](Llama-3.2-3B噪声定标与StageK推进说明.md)
+- [docs/Llama-3.2-3B客户端与Server使用说明.md](Llama-3.2-3B客户端与Server使用说明.md)
 
 它们分别回答：
 

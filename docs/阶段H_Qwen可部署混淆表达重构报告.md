@@ -2,6 +2,8 @@
 
 > Canonical note: 本文档只回答当前 `Stage H` 的状态，不承担全局主线说明。Qwen 唯一主线入口见 [docs/论文一致最终部署主线.md](论文一致最终部署主线.md)。
 
+> 历史阶段报告与旧审计材料将统一归入 `docs/history/qwen/`。
+
 ## 1. 新阶段目标
 
 新版 `Stage H` 的职责不再是单纯做 attention 静态化收敛和噪声定标，而是：
