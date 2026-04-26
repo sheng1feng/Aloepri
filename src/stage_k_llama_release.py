@@ -12,14 +12,14 @@ def default_stage_k_llama_profiles() -> list[StageKProfile]:
             source_dir="artifacts/stage_j_llama_real_full_square",
             description="Zero-noise Llama-3.2-3B standard-shape full-layer checkpoint.",
             recommended_use="Regression baseline, correctness debugging, deterministic demos.",
-            regression_file="outputs/stage_j_llama/real_remote_validation.json",
+            correctness_evidence_file="outputs/stage_j_llama/real_remote_validation.json",
         ),
         StageKProfile(
             name="tiny_a",
             source_dir="artifacts/stage_j_llama_real_full_square_tiny_a",
             description="Recommended non-zero noise Llama-3.2-3B standard-shape full-layer checkpoint.",
             recommended_use="Default delivery profile for Llama-3.2-3B when non-zero obfuscation noise is required.",
-            regression_file="outputs/stage_j_llama/real_tiny_a_remote_validation.json",
+            correctness_evidence_file="outputs/stage_j_llama/real_tiny_a_remote_validation.json",
         ),
     ]
 
