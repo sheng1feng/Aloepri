@@ -6,7 +6,7 @@
 
 仓库当前已经从“研究原型”推进到：
 
-- **Qwen：唯一主线为论文一致最终部署线（见主入口文档，final Stage J/K 仍在收口）**
+- **Qwen：唯一主线为论文一致最终部署线（`Stage J` 与 `Stage K` 已切到 paper-consistent 交付面，最终评测复跑仍在推进）**
 - **Llama-3.2-3B：已完成结构接入、真实 4090 correctness、噪声定标与 Stage K release**
 
 如果你第一次打开这个仓库，建议先看 Qwen 主入口文档中的当前状态与剩余工作定义：
@@ -31,6 +31,7 @@ Qwen 当前只认一条主线：论文一致最终部署线。当前状态以主
 
 - 主入口：[`docs/论文一致最终部署主线.md`](docs/论文一致最终部署主线.md)
 - 当前 Stage J 唯一候选部署物目录：`artifacts/stage_j_qwen_paper_consistent/`
+- 当前 Stage K 唯一发布目录：`artifacts/stage_k_release/`
 - 历史 `standard-shape`/旧 `Stage K` 工件仅作为历史证据，不再作为默认交付路径
 
 ### Llama-3.2-3B
@@ -169,6 +170,8 @@ Stage K 额外提供：
 
 - 主线总入口：[`docs/论文一致最终部署主线.md`](docs/论文一致最终部署主线.md)
 - 当前 Stage J 唯一候选部署物：`artifacts/stage_j_qwen_paper_consistent/`
+- 当前 Stage K 唯一发布目录：`artifacts/stage_k_release/`
+- 当前 Stage K 默认 profile：`default`
 - Stage H：[`docs/阶段H_Qwen可部署混淆表达重构报告.md`](docs/阶段H_Qwen可部署混淆表达重构报告.md)
 - Stage I：[`docs/阶段I_部署约束验证报告.md`](docs/阶段I_部署约束验证报告.md)
 - Stage J：[`docs/阶段J_论文一致部署路线说明.md`](docs/阶段J_论文一致部署路线说明.md)

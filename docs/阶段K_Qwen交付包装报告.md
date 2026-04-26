@@ -2,33 +2,37 @@
 
 > Canonical note: 本文档只回答当前 `Stage K` 的状态，不承担全局主线说明。Qwen 唯一主线入口见 [docs/论文一致最终部署主线.md](论文一致最终部署主线.md)。
 
-## 1. 新阶段目标
+## 1. 当前唯一发布面
 
-新版 `Stage K` 不再默认包装旧 `stage_j_full_square*`，而是包装：
+当前 `Stage K` 只保留一个活跃发布目录：
 
-- 新版 `Stage J` 物化出的 `artifacts/stage_j_qwen_redesign`
+- `artifacts/stage_k_release`
 
-它的职责是：
+它包装的唯一源工件是：
+
+- `artifacts/stage_j_qwen_paper_consistent`
+
+## 2. 当前 profile 语义
+
+当前 `Stage K` 使用两个 profile 名称：
+
+- `default`
+- `reference`
+
+两者当前都指向同一个 `paper_consistent` `Stage J` 工件，但承担不同入口语义：
+
+- `default`：默认交付入口
+- `reference`：审计与证据入口
+
+## 3. 交付职责
+
+当前 `Stage K` 的职责是：
 
 - 提供 release catalog
-- 提供 profile 命名
 - 固定 client/server contract
-- 暴露统一推理入口
+- 提供统一推理入口
+- 把 `Stage J` 的论文一致候选工件收口成唯一发布面
 
-## 2. 当前包装策略
+## 4. 与历史 Stage K 的关系
 
-当前新版 `Stage K` 先使用两个 release profile 名称：
-
-- `stable_reference`
-- `tiny_a`
-
-两者当前都指向 redesigned `Stage J` artifact，但语义上分别承担：
-
-- baseline / packaging verification
-- default delivery alias
-
-后续如果 redesigned Stage J 继续分化出不同 noise/workpoint，可在不改 release 结构的前提下替换 profile source。
-
-## 3. 与 legacy Stage K 的关系
-
-旧版 `Stage K` 仍然保留，但它包装的是 conservative standard-shape line，不再是新版 `Stage K` 的唯一语义。
+旧版 `Stage K` 命名与旧 profile 语义仅作为历史证据保留，不再代表当前唯一论文部署线发布面。

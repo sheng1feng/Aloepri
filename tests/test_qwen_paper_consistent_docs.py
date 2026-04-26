@@ -15,7 +15,7 @@ def test_readme_uses_single_qwen_deployment_entry() -> None:
     assert "J：standard-shape full-layer 恢复" not in text
     assert "artifacts/stage_j_full_square/" not in text
     assert "artifacts/stage_j_full_square_tiny_a/" not in text
-    assert "artifacts/stage_k_release/" not in text
+    assert "artifacts/stage_k_release/" in text
 
 
 def test_readme_uses_canonical_qwen_header_once() -> None:
@@ -67,12 +67,10 @@ def test_mainline_doc_next_steps_are_real_remaining_work() -> None:
     assert section is not None
     next_steps = section.group(1)
 
-    assert "paper-consistent final `Stage J` 产物" in next_steps
-    assert "attention / FFN / norm" in next_steps
-    assert "export-visible" in next_steps
-    assert "`Stage K`" in next_steps
-    assert "最终论文一致线" in next_steps
-    assert "correctness / `VMA / IMA / ISA`" in next_steps
+    assert "唯一 release 面" in next_steps
+    assert "correctness" in next_steps
+    assert "`VMA / IMA / ISA`" in next_steps
+    assert "`default` / `reference`" in next_steps
 
     assert "固定唯一主线文档与阶段主报告" not in next_steps
     assert "合并 Stage-J 冗余文档" not in next_steps
@@ -92,3 +90,26 @@ def test_stage_j_docs_demote_historical_bridge_to_auxiliary_evidence() -> None:
     route_text = Path("docs/阶段J_论文一致部署路线说明.md").read_text(encoding="utf-8")
     assert "历史中间线" in route_text
     assert "artifacts/stage_j_qwen_redesign_standard" in route_text
+
+
+def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
+    stage_k_text = Path("docs/阶段K_Qwen交付包装报告.md").read_text(encoding="utf-8")
+    main_text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
+    readme_text = Path("README.md").read_text(encoding="utf-8")
+    assert "artifacts/stage_k_release" in stage_k_text
+    assert "artifacts/stage_j_qwen_paper_consistent" in stage_k_text
+    assert "`default`" in stage_k_text
+    assert "`reference`" in stage_k_text
+    assert "artifacts/stage_k_release" in main_text
+    assert "artifacts/stage_k_release" in readme_text
+
+
+def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> None:
+    text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
+    section = re.search(r"## 6\. 下一步顺序(.*?)## 7\.", text, re.S)
+    assert section is not None
+    next_steps = section.group(1)
+    assert "唯一 release 面" in next_steps
+    assert "correctness" in next_steps
+    assert "`VMA / IMA / ISA`" in next_steps
+    assert "将 `Stage K` 切换到最终论文一致线" not in next_steps
