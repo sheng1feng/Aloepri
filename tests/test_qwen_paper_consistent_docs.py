@@ -70,7 +70,7 @@ def test_security_docs_are_subordinate_to_main_line() -> None:
 
 def test_mainline_doc_next_steps_are_real_remaining_work() -> None:
     text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
-    section = re.search(r"## 6\. 下一步顺序(.*?)## 7\.", text, re.S)
+    section = re.search(r"## 7\. 下一步顺序(.*?)## 8\.", text, re.S)
     assert section is not None
     next_steps = section.group(1)
 
@@ -129,10 +129,26 @@ def test_security_docs_move_to_history_tree() -> None:
 
 def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> None:
     text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
-    section = re.search(r"## 6\. 下一步顺序(.*?)## 7\.", text, re.S)
+    section = re.search(r"## 7\. 下一步顺序(.*?)## 8\.", text, re.S)
     assert section is not None
     next_steps = section.group(1)
     assert "唯一 release 面" in next_steps
     assert "correctness" in next_steps
     assert "`VMA / IMA / ISA`" in next_steps
     assert "将 `Stage K` 切换到最终论文一致线" not in next_steps
+
+
+def test_qwen_mainline_doc_has_explicit_paper_gap_section() -> None:
+    text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
+    assert "## 6. 与原始论文的当前差异" in text
+    assert "不能表述为“已经与论文完全等价”" in text
+    assert "`paper_consistent`" in text
+    assert "`VMA / IMA / ISA`" in text
+
+
+def test_llama_mainline_doc_lists_release_evidence_inputs() -> None:
+    text = Path("docs/Llama-3.2-3B最终部署主线.md").read_text(encoding="utf-8")
+    assert "## 9. 当前证据入口" in text
+    assert "outputs/stage_j_llama/real_remote_validation.json" in text
+    assert "outputs/stage_j_llama/real_tiny_a_remote_validation.json" in text
+    assert "artifacts/stage_k_llama_release/catalog.json" in text

@@ -36,3 +36,14 @@ def test_old_llama_entry_docs_move_under_history() -> None:
     assert Path("docs/history/llama/Llama-3.2-3B快速使用说明.md").exists()
     assert Path("docs/history/llama/Llama-3.2-3B云端验证说明.md").exists()
     assert Path("docs/history/llama/Llama-3.2-3B本机改造与云验证计划.md").exists()
+
+
+def test_repository_overview_has_stage_map_and_paper_gap_matrix() -> None:
+    text = Path("docs/复现主线总览.md").read_text(encoding="utf-8")
+    assert "## 2. 整个复现流程摘要" in text
+    assert "## 5. 部署线与论文差异对照表" in text
+    assert "| 维度 | 原始论文目标 | Qwen 当前主线 | Llama 当前主线 |" in text
+    assert "`artifacts/stage_k_release`" in text
+    assert "`artifacts/stage_k_llama_release`" in text
+    assert "`paper_consistent`" in text
+    assert "`stable_reference / tiny_a`" in text
