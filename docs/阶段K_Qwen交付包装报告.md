@@ -43,6 +43,23 @@
 
 `outputs/stage_j/paper_consistent/completion_summary.json` 只表示 `Stage J` 是否达到 export-visible completion，不再作为 `Stage K` 的 correctness 证据解释。
 
+当前 `Stage K` release 面还已经补齐最小安全性基线：
+
+- `outputs/security_qwen/vma/stage_k_default.json`
+- `outputs/security_qwen/vma/stage_k_reference.json`
+- `outputs/security_qwen/ima/stage_k_default.json`
+- `outputs/security_qwen/ima/stage_k_reference.json`
+- `outputs/security_qwen/isa/stage_k_default.hidden_state.json`
+- `outputs/security_qwen/isa/stage_k_reference.hidden_state.json`
+- `outputs/security_qwen/isa/stage_k_default.attention_score.json`
+- `outputs/security_qwen/isa/stage_k_reference.attention_score.json`
+
+其中当前结论是：
+
+- `VMA`：低风险
+- `ISA(hidden_state / attention_score)`：低风险
+- `IMA`：高风险
+
 ## 4. 与历史 Stage K 的关系
 
 旧版 `Stage K` 命名与旧 profile 语义仅作为历史证据保留，不再代表当前唯一论文部署线发布面。

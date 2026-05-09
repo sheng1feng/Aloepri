@@ -100,7 +100,8 @@ def test_mainline_doc_next_steps_are_real_remaining_work() -> None:
     assert next_steps
 
     assert "唯一 release 面" in next_steps
-    assert "`VMA / IMA / ISA`" in next_steps
+    assert "`IMA`" in next_steps
+    assert "`correctness / VMA / IMA / ISA`" in next_steps
     assert "`default` / `reference`" in next_steps
 
     assert "固定唯一主线文档与阶段主报告" not in next_steps
@@ -134,6 +135,9 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     assert "outputs/stage_k_release/correctness/default.json" in stage_k_text
     assert "outputs/stage_k_release/correctness/reference.json" in stage_k_text
     assert "outputs/stage_k_release/correctness_summary.json" in stage_k_text
+    assert "outputs/security_qwen/vma/stage_k_default.json" in stage_k_text
+    assert "outputs/security_qwen/ima/stage_k_default.json" in stage_k_text
+    assert "outputs/security_qwen/isa/stage_k_default.hidden_state.json" in stage_k_text
     assert "`default`" in stage_k_text
     assert "`reference`" in stage_k_text
     assert "artifacts/stage_k_release" in main_text
@@ -161,7 +165,7 @@ def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> Non
     next_steps = _extract_section_by_heading(text, "下一步顺序")
     assert next_steps
     assert "唯一 release 面" in next_steps
-    assert "`VMA / IMA / ISA`" in next_steps
+    assert "`IMA`" in next_steps
     assert "将 `Stage K` 切换到最终论文一致线" not in next_steps
 
 
@@ -172,11 +176,12 @@ def test_qwen_mainline_doc_has_explicit_paper_gap_section() -> None:
     assert "不能表述为“已经与论文完全等价”" in section
     assert "`paper_consistent`" in section
     assert "`VMA / IMA / ISA`" in section
+    assert "`IMA` 仍然表现为高风险恢复能力" in section
 
 
-def test_qwen_mainline_doc_lists_executable_rerun_checklist() -> None:
+def test_qwen_mainline_doc_lists_security_results_and_remaining_problem() -> None:
     text = Path("docs/论文一致最终部署主线.md").read_text(encoding="utf-8")
-    checklist = _extract_section_by_heading(text, "剩余复跑可执行清单")
+    checklist = _extract_section_by_heading(text, "当前安全性结果与剩余问题")
     assert checklist
 
     assert "`artifacts/stage_k_release`" in checklist
@@ -190,9 +195,6 @@ def test_qwen_mainline_doc_lists_executable_rerun_checklist() -> None:
     assert "`scripts/security_qwen/run_vma.py`" in checklist
     assert "`scripts/security_qwen/run_ima.py`" in checklist
     assert "`scripts/security_qwen/run_isa.py`" in checklist
-    assert "`--target stage_k_default`" in checklist
-    assert "`--target stage_k_reference`" in checklist
-    assert "`--observable-type`" in checklist
     assert "`outputs/stage_k_release/correctness/default.json`" in checklist
     assert "`outputs/stage_k_release/correctness/reference.json`" in checklist
     assert "`outputs/stage_k_release/correctness_summary.json`" in checklist
@@ -201,8 +203,14 @@ def test_qwen_mainline_doc_lists_executable_rerun_checklist() -> None:
     assert "`outputs/security_qwen/vma/stage_k_default.json`" in checklist
     assert "`outputs/security_qwen/ima/stage_k_reference.json`" in checklist
     assert "`outputs/security_qwen/isa/stage_k_default.hidden_state.json`" in checklist
+    assert "`outputs/security_qwen/isa/stage_k_default.attention_score.json`" in checklist
+    assert "`outputs/security_qwen/summary/security_catalog.json`" in checklist
     assert "`hidden_state`" in checklist
     assert "`attention_score`" in checklist
+    assert "`token_top1_recovery_rate = 0.0859375`" in checklist
+    assert "`token_top1_recovery_rate = 0.9765625`" in checklist
+    assert "`intermediate_top1_recovery_rate = 0.0`" in checklist
+    assert "`IMA`：高风险" in checklist
     assert "不再是当前主线复跑对象" in checklist
 
 
