@@ -100,7 +100,6 @@ def test_mainline_doc_next_steps_are_real_remaining_work() -> None:
     assert next_steps
 
     assert "唯一 release 面" in next_steps
-    assert "correctness" in next_steps
     assert "`VMA / IMA / ISA`" in next_steps
     assert "`default` / `reference`" in next_steps
 
@@ -116,7 +115,8 @@ def test_stage_j_docs_use_paper_consistent_candidate_as_active_target() -> None:
     assert "artifacts/stage_j_qwen_paper_consistent" in route_text
     assert "artifacts/stage_j_qwen_paper_consistent" in readme_text
     assert "outputs/stage_j/paper_consistent/completion_summary.json" in main_text
-    assert "outputs/stage_j/paper_consistent/correctness_regression.json" in main_text
+    assert "outputs/stage_k_release/correctness/default.json" in main_text
+    assert "outputs/stage_k_release/correctness/reference.json" in main_text
 
 
 def test_stage_j_docs_demote_historical_bridge_to_auxiliary_evidence() -> None:
@@ -131,11 +131,15 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     readme_text = Path("README.md").read_text(encoding="utf-8")
     assert "artifacts/stage_k_release" in stage_k_text
     assert "artifacts/stage_j_qwen_paper_consistent" in stage_k_text
-    assert "outputs/stage_j/paper_consistent/correctness_regression.json" in stage_k_text
+    assert "outputs/stage_k_release/correctness/default.json" in stage_k_text
+    assert "outputs/stage_k_release/correctness/reference.json" in stage_k_text
+    assert "outputs/stage_k_release/correctness_summary.json" in stage_k_text
     assert "`default`" in stage_k_text
     assert "`reference`" in stage_k_text
     assert "artifacts/stage_k_release" in main_text
-    assert "outputs/stage_j/paper_consistent/correctness_regression.json" in main_text
+    assert "outputs/stage_k_release/correctness/default.json" in main_text
+    assert "outputs/stage_k_release/correctness/reference.json" in main_text
+    assert "outputs/stage_k_release/correctness_summary.json" in main_text
     assert "artifacts/stage_k_release" in readme_text
 
 
@@ -157,7 +161,6 @@ def test_mainline_doc_no_longer_lists_stage_k_cutover_as_remaining_work() -> Non
     next_steps = _extract_section_by_heading(text, "下一步顺序")
     assert next_steps
     assert "唯一 release 面" in next_steps
-    assert "correctness" in next_steps
     assert "`VMA / IMA / ISA`" in next_steps
     assert "将 `Stage K` 切换到最终论文一致线" not in next_steps
 
@@ -190,9 +193,11 @@ def test_qwen_mainline_doc_lists_executable_rerun_checklist() -> None:
     assert "`--target stage_k_default`" in checklist
     assert "`--target stage_k_reference`" in checklist
     assert "`--observable-type`" in checklist
-    assert "`outputs/stage_j/paper_consistent/correctness_regression.json`" in checklist
-    assert "当前 correctness 证据仍继承自 `Stage J`" in checklist
-    assert "还缺 `Stage K` 自身的 correctness 结果文件" in checklist
+    assert "`outputs/stage_k_release/correctness/default.json`" in checklist
+    assert "`outputs/stage_k_release/correctness/reference.json`" in checklist
+    assert "`outputs/stage_k_release/correctness_summary.json`" in checklist
+    assert "当前 correctness 证据仍继承自 `Stage J`" not in checklist
+    assert "还缺 `Stage K` 自身的 correctness 结果文件" not in checklist
     assert "`outputs/security_qwen/vma/stage_k_default.json`" in checklist
     assert "`outputs/security_qwen/ima/stage_k_reference.json`" in checklist
     assert "`outputs/security_qwen/isa/stage_k_default.hidden_state.json`" in checklist

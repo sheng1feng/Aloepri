@@ -23,14 +23,14 @@ def default_stage_k_profiles() -> list[StageKProfile]:
             source_dir="artifacts/stage_j_qwen_paper_consistent",
             description="Default paper-consistent Stage-J Qwen release profile.",
             recommended_use="Default delivery entry for the paper-consistent Qwen deployment line.",
-            correctness_evidence_file="outputs/stage_j/paper_consistent/correctness_regression.json",
+            correctness_evidence_file="outputs/stage_k_release/correctness/default.json",
         ),
         StageKProfile(
             name="reference",
             source_dir="artifacts/stage_j_qwen_paper_consistent",
             description="Reference paper-consistent Stage-J Qwen release profile.",
             recommended_use="Audit and evidence entry for the same paper-consistent deployment line.",
-            correctness_evidence_file="outputs/stage_j/paper_consistent/correctness_regression.json",
+            correctness_evidence_file="outputs/stage_k_release/correctness/reference.json",
         ),
     ]
 
@@ -41,14 +41,24 @@ def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_correctness_summary(path: str | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    payload = _load_json(Path(path))
+    if not payload:
+        return {}
+    nested = payload.get("summary")
+    if isinstance(nested, dict):
+        if "status" not in nested and "status" in payload:
+            return {"status": payload["status"], **nested}
+        return nested
+    return payload
+
+
 def _profile_summary(profile: StageKProfile, source_dir: Path) -> dict[str, Any]:
     metadata = _load_json(source_dir / "stage_i_metadata.json")
     manifest = _load_json(source_dir / "manifest.json")
-    correctness = {}
-    if profile.correctness_evidence_file is not None:
-        candidate = Path(profile.correctness_evidence_file)
-        if candidate.exists():
-            correctness = _load_json(candidate)
+    correctness = _read_correctness_summary(profile.correctness_evidence_file)
     return {
         "name": profile.name,
         "description": profile.description,

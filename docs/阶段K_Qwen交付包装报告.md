@@ -35,9 +35,11 @@
 - 提供统一推理入口
 - 把 `Stage J` 的论文一致候选工件收口成唯一发布面
 
-当前 `Stage K` 的活跃 correctness 证据直接继承自唯一 `paper_consistent` 候选：
+当前 `Stage K` 的活跃 correctness 证据只认 release-surface 自身导出的结果文件：
 
-- `outputs/stage_j/paper_consistent/correctness_regression.json`
+- `outputs/stage_k_release/correctness/default.json`
+- `outputs/stage_k_release/correctness/reference.json`
+- `outputs/stage_k_release/correctness_summary.json`
 
 `outputs/stage_j/paper_consistent/completion_summary.json` 只表示 `Stage J` 是否达到 export-visible completion，不再作为 `Stage K` 的 correctness 证据解释。
 

@@ -29,10 +29,10 @@ def test_stage_k_profiles_point_to_paper_consistent_stage_j() -> None:
 
 def test_stage_k_profiles_point_to_paper_consistent_correctness_evidence() -> None:
     profiles = default_stage_k_profiles()
-    assert all(
-        item.correctness_evidence_file == "outputs/stage_j/paper_consistent/correctness_regression.json"
-        for item in profiles
-    )
+    assert [item.correctness_evidence_file for item in profiles] == [
+        "outputs/stage_k_release/correctness/default.json",
+        "outputs/stage_k_release/correctness/reference.json",
+    ]
 
 
 def test_infer_stage_k_release_defaults_to_default_profile(monkeypatch) -> None:
