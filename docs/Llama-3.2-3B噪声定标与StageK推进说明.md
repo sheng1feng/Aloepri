@@ -146,4 +146,4 @@ conda run --no-capture-output -n qwen-transformers python scripts/export_stage_j
 
 因此当前可以正式给出结论：
 
-> **Llama-3.2-3B 已经完成噪声定标与 Stage K release 包装，在交付层级上已经与 Qwen 基本对齐。**
+> **Llama-3.2-3B 已经完成噪声定标与 Stage K release 包装，并形成独立可运行 release；但整体仍明显落后于 Qwen 主线，尤其缺少论文一致安全闭环。**

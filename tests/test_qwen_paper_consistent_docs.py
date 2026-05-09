@@ -49,6 +49,8 @@ def test_readme_points_to_repository_and_dual_mainlines() -> None:
     assert "docs/复现主线总览.md" in text
     assert "docs/论文一致最终部署主线.md" in text
     assert "docs/Llama-3.2-3B最终部署主线.md" in text
+    assert "Qwen 是当前仓库里最完整、最接近论文闭环的主线" in text
+    assert "Llama 当前明显落后于 Qwen" in text
 
 
 def test_readme_uses_canonical_qwen_header_once() -> None:
@@ -239,3 +241,6 @@ def test_llama_mainline_doc_lists_release_evidence_inputs() -> None:
     assert "outputs/stage_j_llama/real_remote_validation.json" in text
     assert "outputs/stage_j_llama/real_tiny_a_remote_validation.json" in text
     assert "artifacts/stage_k_llama_release/catalog.json" in text
+    assert "明显落后于 Qwen" in text
+    assert "不是论文同态收口" in text
+    assert "已基本与 Qwen 对齐" not in text

@@ -32,6 +32,7 @@ Qwen 当前只保留一条活跃主线：
 
 当前状态：
 
+- Qwen 是当前仓库里最完整、最接近论文闭环的主线，整体已经基本完善
 - `Stage J` 已达到 export-visible completion
 - `Stage K` 已切到唯一 `paper_consistent` release surface
 - 最终 release 面上的 correctness 与 `VMA / IMA / ISA` 已补齐
@@ -60,6 +61,7 @@ Llama 当前只保留一条活跃主线：
 
 当前状态：
 
+- Llama 当前明显落后于 Qwen，仍主要停留在 `deployability / correctness` 交付层，不是论文同态收口
 - adapter、本机 smoke、Stage I、Stage J 已成立
 - 真实 `RTX 4090` correctness 验证已完成
 - 噪声定标与 Llama 专属 `Stage K release` 已完成
