@@ -43,12 +43,10 @@
 
 `outputs/stage_j/paper_consistent/completion_summary.json` 只表示 `Stage J` 是否达到 export-visible completion，不再作为 `Stage K` 的 correctness 证据解释。
 
-当前 `Stage K` release 面已经补齐安全结果，并把 `IMA` 明确分成“历史最小基线”和“论文口径重测”两条：
+当前 `Stage K` release 面已经补齐当前主线安全结果：
 
 - `outputs/security_qwen/vma/stage_k_default.json`
 - `outputs/security_qwen/vma/stage_k_reference.json`
-- `outputs/security_qwen/ima/stage_k_default.json`
-- `outputs/security_qwen/ima/stage_k_reference.json`
 - `outputs/security_qwen/ima/stage_k_default.paper_like.json`
 - `outputs/security_qwen/ima/stage_k_reference.paper_like.json`
 - `outputs/security_qwen/isa/stage_k_default.hidden_state.json`
@@ -60,15 +58,13 @@
 
 - `VMA`：低风险
 - `ISA(hidden_state / attention_score)`：低风险
-- `IMA(minimal)`：高风险
-- `IMA(paper_like)`：低风险
+- `IMA`：低风险
 
-当前 `Stage K` 的主线安全结论只认 `IMA(paper_like)`。
+当前 `Stage K` 的 `IMA` 结论只认 `paper_like` 结果，也就是：
 
-原因是：
-
-- `minimal` 结果来自旧的 ridge row-inversion baseline，它直接使用 `perm_vocab` 对齐混淆 row，测的是 row-level learnability
-- `paper_like` 结果使用 `scripts/security_qwen/run_ima.py --mode paper_like`，按论文描述切成 `2 layers / 8 heads` 的小型 `Qwen2` 反演器，并在本地公共文档语料上训练
+- `scripts/security_qwen/run_ima.py --mode paper_like`
+- `outputs/security_qwen/ima/stage_k_default.paper_like.json`
+- `outputs/security_qwen/ima/stage_k_reference.paper_like.json`
 
 ## 4. 与历史 Stage K 的关系
 

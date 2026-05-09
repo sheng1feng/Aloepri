@@ -136,8 +136,8 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     assert "outputs/stage_k_release/correctness/reference.json" in stage_k_text
     assert "outputs/stage_k_release/correctness_summary.json" in stage_k_text
     assert "outputs/security_qwen/vma/stage_k_default.json" in stage_k_text
-    assert "outputs/security_qwen/ima/stage_k_default.json" in stage_k_text
     assert "outputs/security_qwen/ima/stage_k_default.paper_like.json" in stage_k_text
+    assert "outputs/security_qwen/ima/stage_k_default.json" not in stage_k_text
     assert "outputs/security_qwen/isa/stage_k_default.hidden_state.json" in stage_k_text
     assert "`default`" in stage_k_text
     assert "`reference`" in stage_k_text
@@ -146,6 +146,7 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     assert "outputs/stage_k_release/correctness/reference.json" in main_text
     assert "outputs/stage_k_release/correctness_summary.json" in main_text
     assert "outputs/security_qwen/ima/stage_k_default.paper_like.json" in main_text
+    assert "outputs/security_qwen/ima/stage_k_default.json" not in main_text
     assert "artifacts/stage_k_release" in readme_text
 
 
@@ -205,20 +206,31 @@ def test_qwen_mainline_doc_lists_security_results_and_remaining_problem() -> Non
     assert "当前 correctness 证据仍继承自 `Stage J`" not in checklist
     assert "还缺 `Stage K` 自身的 correctness 结果文件" not in checklist
     assert "`outputs/security_qwen/vma/stage_k_default.json`" in checklist
-    assert "`outputs/security_qwen/ima/stage_k_reference.json`" in checklist
     assert "`outputs/security_qwen/ima/stage_k_reference.paper_like.json`" in checklist
+    assert "`outputs/security_qwen/ima/stage_k_reference.json`" not in checklist
     assert "`outputs/security_qwen/isa/stage_k_default.hidden_state.json`" in checklist
     assert "`outputs/security_qwen/isa/stage_k_default.attention_score.json`" in checklist
     assert "`outputs/security_qwen/summary/security_catalog.json`" in checklist
     assert "`hidden_state`" in checklist
     assert "`attention_score`" in checklist
     assert "`token_top1_recovery_rate = 0.0859375`" in checklist
-    assert "`token_top1_recovery_rate = 0.9765625`" in checklist
     assert "`token_top1_recovery_rate = 0.0`" in checklist
     assert "`intermediate_top1_recovery_rate = 0.0`" in checklist
-    assert "`IMA(paper_like)`：低风险" in checklist
-    assert "`IMA(minimal history baseline)`：高风险" in checklist
+    assert "`IMA`：低风险" in checklist
     assert "不再是当前主线复跑对象" in checklist
+
+
+def test_active_qwen_docs_no_longer_use_minimal_ima_as_mainline_wording() -> None:
+    for path in [
+        "README.md",
+        "docs/复现主线总览.md",
+        "docs/论文一致最终部署主线.md",
+        "docs/阶段K_Qwen交付包装报告.md",
+    ]:
+        text = Path(path).read_text(encoding="utf-8")
+        assert "历史最小基线" not in text
+        assert "completed_minimal_baseline" not in text
+        assert "row-level learnability" not in text
 
 
 def test_llama_mainline_doc_lists_release_evidence_inputs() -> None:
