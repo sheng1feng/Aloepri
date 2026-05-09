@@ -8,10 +8,13 @@ from typing import Any, Iterable
 
 import torch
 from safetensors.torch import load_file
-from transformers import AutoTokenizer
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 from src.defaults import DEFAULT_MODEL_DIR, DEFAULT_PROMPTS, DEFAULT_SEED
 from src.key_manager import ordinary_token_ids
+from src.model_loader import set_global_seed
 from src.security_qwen.artifacts import resolve_security_target
 from src.security_qwen.metrics import classify_risk_level
 from src.security_qwen.schema import SecurityEvalTarget, build_security_eval_payload
@@ -31,6 +34,36 @@ class IMABaselineConfig:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["ridge_alphas"] = list(self.ridge_alphas)
+        return payload
+
+
+DEFAULT_PAPER_LIKE_CORPUS_PATHS: tuple[str, ...] = (
+    "docs/Towards Privacy-Preserving LLM Inference via Collaborative Obfuscation (Technical Report).txt",
+    "docs/AloePri 论文中的部署适配机制整理.md",
+    "docs/AloePri_技术报告梳理与复现方案.md",
+    "README.md",
+)
+
+
+@dataclass(frozen=True)
+class IMAPaperLikeConfig:
+    baseline_model_dir: str = DEFAULT_MODEL_DIR
+    seed: int = DEFAULT_SEED
+    sequence_length: int = 32
+    train_sequence_count: int = 128
+    val_sequence_count: int = 16
+    test_sequence_count: int = 16
+    batch_size: int = 8
+    epochs: int = 2
+    learning_rate: float = 3e-4
+    weight_decay: float = 0.0
+    topk: int = 10
+    candidate_pool_strategy: str = "full_movable_vocab"
+    public_corpus_paths: tuple[str, ...] = DEFAULT_PAPER_LIKE_CORPUS_PATHS
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["public_corpus_paths"] = list(self.public_corpus_paths)
         return payload
 
 
@@ -70,6 +103,178 @@ def build_ima_template(target: SecurityEvalTarget) -> dict:
         },
         artifacts={},
     )
+
+
+def default_ima_output_path(target_name: str, *, mode: str = "minimal") -> Path:
+    suffix = ".paper_like.json" if mode == "paper_like" else ".json"
+    return Path(f"outputs/security_qwen/ima/{target_name}{suffix}")
+
+
+def _load_public_inversion_texts(corpus_paths: Iterable[str]) -> list[str]:
+    texts: list[str] = []
+    for item in corpus_paths:
+        path = Path(item)
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            texts.append(text)
+    return texts
+
+
+def build_paper_like_inverter_config(
+    *,
+    observed_hidden_size: int,
+    vocab_size: int,
+    baseline_model_dir: str = DEFAULT_MODEL_DIR,
+):
+    if observed_hidden_size % 8 != 0:
+        raise ValueError(f"observed_hidden_size must be divisible by 8, got {observed_hidden_size}")
+    config = AutoConfig.from_pretrained(baseline_model_dir, trust_remote_code=True)
+    config.hidden_size = int(observed_hidden_size)
+    config.num_hidden_layers = 2
+    config.num_attention_heads = 8
+    config.num_key_value_heads = 8
+    config.intermediate_size = max(int(observed_hidden_size) * 4, int(getattr(config, "intermediate_size", 0) or 0))
+    config.vocab_size = int(vocab_size)
+    config.torch_dtype = "float32"
+    return config
+
+
+class _PaperLikeIMAInverter(nn.Module):
+    def __init__(self, *, backbone_config, target_embedding_dim: int) -> None:
+        super().__init__()
+        self.backbone = AutoModel.from_config(backbone_config)
+        self.output_proj = nn.Linear(int(backbone_config.hidden_size), int(target_embedding_dim), bias=False)
+        self.float()
+
+    def forward(self, inputs_embeds: torch.Tensor) -> torch.Tensor:
+        hidden = self.backbone(inputs_embeds=inputs_embeds, use_cache=False).last_hidden_state
+        return self.output_proj(hidden)
+
+
+def _resolve_ima_device(device: str) -> str:
+    if device != "auto":
+        return device
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _collect_public_token_windows(
+    *,
+    tokenizer,
+    corpus_paths: Iterable[str],
+    sequence_length: int,
+    train_sequence_count: int,
+    val_sequence_count: int,
+    test_sequence_count: int,
+    seed: int,
+) -> dict[str, Any]:
+    texts = _load_public_inversion_texts(corpus_paths)
+    if not texts:
+        raise FileNotFoundError("No readable public inversion corpus texts were found.")
+
+    all_tokens: list[int] = []
+    for text in texts:
+        all_tokens.extend(tokenizer(text, add_special_tokens=False)["input_ids"])
+    all_tokens = [int(token_id) for token_id in all_tokens if 0 <= int(token_id) < tokenizer.vocab_size]
+
+    windows: list[list[int]] = []
+    step = int(sequence_length)
+    for start in range(0, max(len(all_tokens) - step + 1, 0), step):
+        window = all_tokens[start : start + step]
+        if len(window) == step:
+            windows.append(window)
+
+    required = int(train_sequence_count) + int(val_sequence_count) + int(test_sequence_count)
+    if len(windows) < required:
+        raise ValueError(f"Need at least {required} public windows, found {len(windows)}")
+
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(seed)
+    order = torch.randperm(len(windows), generator=generator).tolist()
+    shuffled = [windows[index] for index in order[:required]]
+
+    train_end = int(train_sequence_count)
+    val_end = train_end + int(val_sequence_count)
+    train = torch.tensor(shuffled[:train_end], dtype=torch.long)
+    val = torch.tensor(shuffled[train_end:val_end], dtype=torch.long)
+    test = torch.tensor(shuffled[val_end:required], dtype=torch.long)
+    return {
+        "texts": texts,
+        "train_plain_ids": train,
+        "val_plain_ids": val,
+        "test_plain_ids": test,
+    }
+
+
+def _rank_candidate_plain_ids(
+    *,
+    predicted_embeddings: torch.Tensor,
+    candidate_plain_ids: torch.Tensor,
+    baseline_embed: torch.Tensor,
+    topk: int,
+    chunk_size: int = 4096,
+) -> torch.Tensor:
+    pred_norm = predicted_embeddings / predicted_embeddings.norm(dim=1, keepdim=True).clamp_min(1e-8)
+    best_scores = torch.full((pred_norm.shape[0], 0), float("-inf"), dtype=pred_norm.dtype, device=pred_norm.device)
+    best_plain_ids = torch.empty((pred_norm.shape[0], 0), dtype=torch.long, device=pred_norm.device)
+    k = min(int(topk), int(candidate_plain_ids.numel()))
+
+    for start in range(0, int(candidate_plain_ids.numel()), int(chunk_size)):
+        end = min(start + int(chunk_size), int(candidate_plain_ids.numel()))
+        chunk_ids = candidate_plain_ids[start:end]
+        chunk_embeddings = baseline_embed[chunk_ids]
+        chunk_norm = chunk_embeddings / chunk_embeddings.norm(dim=1, keepdim=True).clamp_min(1e-8)
+        scores = pred_norm @ chunk_norm.T
+        chunk_scores, chunk_indices = torch.topk(scores, k=min(k, scores.shape[1]), dim=1)
+        chunk_plain_ids = chunk_ids[chunk_indices]
+
+        merged_scores = torch.cat([best_scores, chunk_scores], dim=1)
+        merged_plain_ids = torch.cat([best_plain_ids, chunk_plain_ids], dim=1)
+        new_scores, new_indices = torch.topk(merged_scores, k=k, dim=1)
+        best_scores = new_scores
+        best_plain_ids = merged_plain_ids.gather(1, new_indices)
+
+    return best_plain_ids
+
+
+def _evaluate_sequence_inversion_predictions(
+    *,
+    predicted_embeddings: torch.Tensor,
+    true_plain_ids: torch.Tensor,
+    candidate_plain_ids: torch.Tensor,
+    baseline_embed: torch.Tensor,
+    sensitive_plain_ids: torch.Tensor,
+    topk: int,
+) -> dict[str, Any]:
+    flat_pred = predicted_embeddings.reshape(-1, predicted_embeddings.shape[-1])
+    flat_true = true_plain_ids.reshape(-1)
+    predicted_plain_ids = _rank_candidate_plain_ids(
+        predicted_embeddings=flat_pred,
+        candidate_plain_ids=candidate_plain_ids,
+        baseline_embed=baseline_embed,
+        topk=topk,
+    )
+    hits = predicted_plain_ids.eq(flat_true.unsqueeze(1))
+    true_embeddings = baseline_embed[flat_true]
+    top1_embeddings = baseline_embed[predicted_plain_ids[:, 0]]
+    cosine = _row_cosine_similarity(top1_embeddings, true_embeddings)
+
+    sensitive_rate = None
+    sensitive_mask = torch.isin(flat_true, sensitive_plain_ids) if sensitive_plain_ids.numel() > 0 else torch.zeros_like(flat_true, dtype=torch.bool)
+    if bool(sensitive_mask.any()):
+        sensitive_rate = float(
+            predicted_plain_ids[sensitive_mask, 0].eq(flat_true[sensitive_mask]).to(torch.float32).mean().item()
+        )
+
+    return {
+        "token_top1_recovery_rate": float(hits[:, 0].to(torch.float32).mean().item()),
+        "token_top10_recovery_rate": float(hits[:, : min(10, hits.shape[1])].any(dim=1).to(torch.float32).mean().item()),
+        "embedding_cosine_similarity": float(cosine.mean().item()),
+        "sensitive_token_recovery_rate": sensitive_rate,
+        "predicted_plain_ids_sample": predicted_plain_ids[:10, 0].tolist(),
+        "evaluated_token_count": int(flat_true.numel()),
+    }
 
 
 def _load_standard_embedding(server_dir: str) -> torch.Tensor:
@@ -390,6 +595,204 @@ def run_ima_baseline(
     return payload
 
 
+def run_ima_paper_like(
+    *,
+    target_name: str,
+    baseline_model_dir: str = DEFAULT_MODEL_DIR,
+    seed: int = DEFAULT_SEED,
+    sequence_length: int = 32,
+    train_sequence_count: int = 128,
+    val_sequence_count: int = 16,
+    test_sequence_count: int = 16,
+    batch_size: int = 8,
+    epochs: int = 2,
+    learning_rate: float = 3e-4,
+    weight_decay: float = 0.0,
+    topk: int = 10,
+    device: str = "auto",
+    public_corpus_paths: Iterable[str] = DEFAULT_PAPER_LIKE_CORPUS_PATHS,
+) -> dict[str, Any]:
+    start_time = time.perf_counter()
+    set_global_seed(seed)
+    resolved_corpus_paths = tuple(str(item) for item in public_corpus_paths) or DEFAULT_PAPER_LIKE_CORPUS_PATHS
+
+    baseline_embed, observed_embed, aux = load_ima_embedding_sources(
+        target_name=target_name,
+        baseline_model_dir=baseline_model_dir,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(baseline_model_dir, trust_remote_code=True)
+    corpus = _collect_public_token_windows(
+        tokenizer=tokenizer,
+        corpus_paths=resolved_corpus_paths,
+        sequence_length=sequence_length,
+        train_sequence_count=train_sequence_count,
+        val_sequence_count=val_sequence_count,
+        test_sequence_count=test_sequence_count,
+        seed=seed,
+    )
+    sensitive_plain_ids = _collect_sensitive_plain_ids(tokenizer)
+    candidate_plain_ids = ordinary_token_ids(tokenizer)
+    perm_vocab = aux["perm_vocab"]
+
+    train_plain_ids = corpus["train_plain_ids"]
+    val_plain_ids = corpus["val_plain_ids"]
+    test_plain_ids = corpus["test_plain_ids"]
+
+    x_train = observed_embed[perm_vocab[train_plain_ids]]
+    y_train = baseline_embed[train_plain_ids]
+    x_val = observed_embed[perm_vocab[val_plain_ids]]
+    x_test = observed_embed[perm_vocab[test_plain_ids]]
+
+    resolved_device = _resolve_ima_device(device)
+    attack_config = build_paper_like_inverter_config(
+        observed_hidden_size=int(observed_embed.shape[1]),
+        vocab_size=int(tokenizer.vocab_size),
+        baseline_model_dir=baseline_model_dir,
+    )
+    model = _PaperLikeIMAInverter(
+        backbone_config=attack_config,
+        target_embedding_dim=int(baseline_embed.shape[1]),
+    ).to(resolved_device)
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    train_loader = DataLoader(
+        TensorDataset(x_train, y_train),
+        batch_size=batch_size,
+        shuffle=True,
+    )
+
+    x_val_device = x_val.to(resolved_device)
+    x_test_device = x_test.to(resolved_device)
+    baseline_embed_device = baseline_embed.to(resolved_device)
+    candidate_plain_ids_device = candidate_plain_ids.to(resolved_device)
+    sensitive_plain_ids_device = sensitive_plain_ids.to(resolved_device)
+
+    best_epoch = -1
+    best_val_top1 = -1.0
+    best_state: dict[str, torch.Tensor] | None = None
+    epoch_summaries: list[dict[str, Any]] = []
+
+    for epoch_idx in range(int(epochs)):
+        model.train()
+        total_loss = 0.0
+        total_batches = 0
+        for batch_inputs, batch_targets in train_loader:
+            batch_inputs = batch_inputs.to(resolved_device)
+            batch_targets = batch_targets.to(resolved_device)
+            optimizer.zero_grad(set_to_none=True)
+            pred = model(batch_inputs)
+            loss = torch.nn.functional.mse_loss(pred, batch_targets)
+            loss.backward()
+            optimizer.step()
+            total_loss += float(loss.item())
+            total_batches += 1
+
+        model.eval()
+        with torch.no_grad():
+            val_pred = model(x_val_device)
+            val_metrics = _evaluate_sequence_inversion_predictions(
+                predicted_embeddings=val_pred,
+                true_plain_ids=val_plain_ids.to(resolved_device),
+                candidate_plain_ids=candidate_plain_ids_device,
+                baseline_embed=baseline_embed_device,
+                sensitive_plain_ids=sensitive_plain_ids_device,
+                topk=topk,
+            )
+
+        epoch_summary = {
+            "epoch": epoch_idx + 1,
+            "train_loss": total_loss / max(total_batches, 1),
+            "val_token_top1_recovery_rate": val_metrics["token_top1_recovery_rate"],
+            "val_token_top10_recovery_rate": val_metrics["token_top10_recovery_rate"],
+            "val_embedding_cosine_similarity": val_metrics["embedding_cosine_similarity"],
+        }
+        epoch_summaries.append(epoch_summary)
+
+        if val_metrics["token_top1_recovery_rate"] > best_val_top1:
+            best_val_top1 = float(val_metrics["token_top1_recovery_rate"])
+            best_epoch = epoch_idx + 1
+            best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+
+    if best_state is None:
+        raise RuntimeError("IMA paper-like attack failed to produce a best checkpoint")
+
+    model.load_state_dict(best_state)
+    model.to(resolved_device)
+    model.eval()
+    with torch.no_grad():
+        test_pred = model(x_test_device)
+        test_metrics = _evaluate_sequence_inversion_predictions(
+            predicted_embeddings=test_pred,
+            true_plain_ids=test_plain_ids.to(resolved_device),
+            candidate_plain_ids=candidate_plain_ids_device,
+            baseline_embed=baseline_embed_device,
+            sensitive_plain_ids=sensitive_plain_ids_device,
+            topk=topk,
+        )
+
+    runtime_seconds = time.perf_counter() - start_time
+    resolved = aux["resolved_target"]
+    payload = build_security_eval_payload(
+        attack="ima",
+        target=SecurityEvalTarget(
+            stage=resolved["stage"],
+            artifact_dir=resolved["artifact_dir"],
+            profile=resolved["profile"],
+            model_family="qwen",
+            variant=resolved["variant"],
+        ),
+        config={
+            "phase": "paper_like",
+            **IMAPaperLikeConfig(
+                baseline_model_dir=baseline_model_dir,
+                seed=seed,
+                sequence_length=sequence_length,
+                train_sequence_count=int(train_plain_ids.shape[0]),
+                val_sequence_count=int(val_plain_ids.shape[0]),
+                test_sequence_count=int(test_plain_ids.shape[0]),
+                batch_size=batch_size,
+                epochs=epochs,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                topk=topk,
+                public_corpus_paths=resolved_corpus_paths,
+            ).to_dict(),
+            "dataset_name": "phase0_inversion_public_corpus_local_docs",
+            "prediction_targets": ["embedding", "token_id"],
+            "attack_model_family": "qwen2",
+            "attack_hidden_size": int(attack_config.hidden_size),
+            "attack_num_hidden_layers": int(attack_config.num_hidden_layers),
+            "attack_num_attention_heads": int(attack_config.num_attention_heads),
+            "device": resolved_device,
+            "best_epoch": best_epoch,
+            "epoch_summaries": epoch_summaries,
+        },
+        metrics={
+            **test_metrics,
+            "train_sequence_count": int(train_plain_ids.shape[0]),
+            "val_sequence_count": int(val_plain_ids.shape[0]),
+            "test_sequence_count": int(test_plain_ids.shape[0]),
+            "sequence_length": int(sequence_length),
+            "candidate_plain_token_count": int(candidate_plain_ids.numel()),
+            "attack_runtime_seconds": runtime_seconds,
+        },
+        summary={
+            "status": "completed_paper_like",
+            "primary_metric_name": "token_top1_recovery_rate",
+            "primary_metric_value": test_metrics["token_top1_recovery_rate"],
+            "risk_level": classify_risk_level(test_metrics["token_top1_recovery_rate"]),
+            "notes": "Paper-like Qwen2 embedding inversion attack trained on local public docs with a 2-layer, 8-head inverter.",
+        },
+        artifacts={
+            "resolved_target": resolved,
+            "predicted_plain_ids_sample": test_metrics["predicted_plain_ids_sample"],
+            "public_corpus_paths": list(resolved_corpus_paths),
+            "public_corpus_document_count": len(corpus["texts"]),
+        },
+    )
+    return payload
+
+
 def build_ima_comparison_payload(
     *,
     result_payloads: list[dict[str, Any]],
@@ -407,6 +810,7 @@ def build_ima_comparison_payload(
             "profile": target.get("profile"),
             "artifact_dir": target.get("artifact_dir"),
             "variant": target.get("variant"),
+            "phase": payload.get("config", {}).get("phase"),
             "token_top1_recovery_rate": metrics.get("token_top1_recovery_rate"),
             "token_top10_recovery_rate": metrics.get("token_top10_recovery_rate"),
             "embedding_cosine_similarity": metrics.get("embedding_cosine_similarity"),

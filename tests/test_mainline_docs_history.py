@@ -48,4 +48,5 @@ def test_repository_overview_has_stage_map_and_paper_gap_matrix() -> None:
     assert "`paper_consistent`" in text
     assert "`stable_reference / tiny_a`" in text
     assert "`VMA / ISA` 已在唯一 release 面上给出低风险结果" in text
-    assert "`IMA` 已在唯一 release 面上复跑，但仍是高风险" in text
+    assert "历史最小基线高风险" in text
+    assert "`paper_like` 重测为低风险" in text

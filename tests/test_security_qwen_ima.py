@@ -1,10 +1,15 @@
+from pathlib import Path
+
 import torch
 
 from src.security_qwen.ima import (
     _evaluate_inversion_predictions,
     _fit_ridge_regressor,
+    _load_public_inversion_texts,
     _predict_ridge,
     build_ima_comparison_payload,
+    build_paper_like_inverter_config,
+    default_ima_output_path,
 )
 
 
@@ -59,3 +64,36 @@ def test_ima_comparison_payload_computes_stage_a_deltas() -> None:
     assert payload["format"] == "qwen_security_ima_comparison_v1"
     row_map = {row["target_name"]: row for row in payload["rows"]}
     assert abs(row_map["stage_h_full_obfuscated"]["vs_stage_a_top1_delta"] + 0.7) < 1e-8
+
+
+def test_default_ima_output_path_uses_mode_specific_suffix() -> None:
+    assert default_ima_output_path("stage_k_default") == Path("outputs/security_qwen/ima/stage_k_default.json")
+    assert default_ima_output_path("stage_k_default", mode="paper_like") == Path("outputs/security_qwen/ima/stage_k_default.paper_like.json")
+
+
+def test_load_public_inversion_texts_keeps_non_empty_repo_like_docs(tmp_path: Path) -> None:
+    first = tmp_path / "paper.txt"
+    second = tmp_path / "notes.md"
+    blank = tmp_path / "blank.md"
+    first.write_text("AloePri paper corpus line one.\n\nline two.", encoding="utf-8")
+    second.write_text("# Heading\n\nPaper-like inversion notes.", encoding="utf-8")
+    blank.write_text("   \n", encoding="utf-8")
+
+    texts = _load_public_inversion_texts([str(first), str(second), str(blank), str(tmp_path / "missing.md")])
+    assert texts == [
+        "AloePri paper corpus line one.\n\nline two.",
+        "# Heading\n\nPaper-like inversion notes.",
+    ]
+
+
+def test_build_paper_like_inverter_config_matches_paper_shape() -> None:
+    config = build_paper_like_inverter_config(
+        observed_hidden_size=1152,
+        vocab_size=151936,
+    )
+    assert config.hidden_size == 1152
+    assert config.num_hidden_layers == 2
+    assert config.num_attention_heads == 8
+    assert config.num_key_value_heads == 8
+    assert config.vocab_size == 151936
+    assert str(config.torch_dtype) == "float32"

@@ -49,11 +49,15 @@ from src.security_qwen.gate6_enhancement import (
 from src.security_qwen.ia import build_ia_template
 from src.security_qwen.ima import (
     IMABaselineConfig,
+    IMAPaperLikeConfig,
     build_ima_comparison_payload,
     build_ima_template,
+    build_paper_like_inverter_config,
     default_ima_gate2_targets,
+    default_ima_output_path,
     load_ima_embedding_sources,
     run_ima_baseline,
+    run_ima_paper_like,
 )
 from src.security_qwen.isa import (
     ISABaselineConfig,
@@ -90,11 +94,15 @@ __all__ = [
     "run_vma_baseline",
     "build_ia_template",
     "IMABaselineConfig",
+    "IMAPaperLikeConfig",
     "build_ima_template",
     "build_ima_comparison_payload",
+    "build_paper_like_inverter_config",
     "default_ima_gate2_targets",
+    "default_ima_output_path",
     "load_ima_embedding_sources",
     "run_ima_baseline",
+    "run_ima_paper_like",
     "ISABaselineConfig",
     "build_isa_comparison_payload",
     "build_isa_template",

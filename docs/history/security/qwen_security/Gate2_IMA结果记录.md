@@ -1,5 +1,7 @@
 # Gate 2：IMA 结果记录
 
+> 历史说明：本文档记录的是旧的最小 ridge `IMA` baseline。当前 Qwen 主线用于对照论文结论的 `IMA` 结果，见 `outputs/security_qwen/ima/stage_k_default.paper_like.json`、`outputs/security_qwen/ima/stage_k_reference.paper_like.json` 及 [docs/论文一致最终部署主线.md](../../../论文一致最终部署主线.md)。
+
 ## 1. 目标
 
 Gate 2 的目标是完成一条**训练式反演攻击**闭环，回答：

@@ -137,6 +137,7 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     assert "outputs/stage_k_release/correctness_summary.json" in stage_k_text
     assert "outputs/security_qwen/vma/stage_k_default.json" in stage_k_text
     assert "outputs/security_qwen/ima/stage_k_default.json" in stage_k_text
+    assert "outputs/security_qwen/ima/stage_k_default.paper_like.json" in stage_k_text
     assert "outputs/security_qwen/isa/stage_k_default.hidden_state.json" in stage_k_text
     assert "`default`" in stage_k_text
     assert "`reference`" in stage_k_text
@@ -144,6 +145,7 @@ def test_stage_k_docs_use_paper_consistent_release_surface() -> None:
     assert "outputs/stage_k_release/correctness/default.json" in main_text
     assert "outputs/stage_k_release/correctness/reference.json" in main_text
     assert "outputs/stage_k_release/correctness_summary.json" in main_text
+    assert "outputs/security_qwen/ima/stage_k_default.paper_like.json" in main_text
     assert "artifacts/stage_k_release" in readme_text
 
 
@@ -176,7 +178,9 @@ def test_qwen_mainline_doc_has_explicit_paper_gap_section() -> None:
     assert "不能表述为“已经与论文完全等价”" in section
     assert "`paper_consistent`" in section
     assert "`VMA / IMA / ISA`" in section
-    assert "`IMA` 仍然表现为高风险恢复能力" in section
+    assert "本地文档公共语料代理" in section
+    assert "`alpha_e = 1.0`" in section
+    assert "`alpha_h = 0.2`" in section
 
 
 def test_qwen_mainline_doc_lists_security_results_and_remaining_problem() -> None:
@@ -202,6 +206,7 @@ def test_qwen_mainline_doc_lists_security_results_and_remaining_problem() -> Non
     assert "还缺 `Stage K` 自身的 correctness 结果文件" not in checklist
     assert "`outputs/security_qwen/vma/stage_k_default.json`" in checklist
     assert "`outputs/security_qwen/ima/stage_k_reference.json`" in checklist
+    assert "`outputs/security_qwen/ima/stage_k_reference.paper_like.json`" in checklist
     assert "`outputs/security_qwen/isa/stage_k_default.hidden_state.json`" in checklist
     assert "`outputs/security_qwen/isa/stage_k_default.attention_score.json`" in checklist
     assert "`outputs/security_qwen/summary/security_catalog.json`" in checklist
@@ -209,8 +214,10 @@ def test_qwen_mainline_doc_lists_security_results_and_remaining_problem() -> Non
     assert "`attention_score`" in checklist
     assert "`token_top1_recovery_rate = 0.0859375`" in checklist
     assert "`token_top1_recovery_rate = 0.9765625`" in checklist
+    assert "`token_top1_recovery_rate = 0.0`" in checklist
     assert "`intermediate_top1_recovery_rate = 0.0`" in checklist
-    assert "`IMA`：高风险" in checklist
+    assert "`IMA(paper_like)`：低风险" in checklist
+    assert "`IMA(minimal history baseline)`：高风险" in checklist
     assert "不再是当前主线复跑对象" in checklist
 
 

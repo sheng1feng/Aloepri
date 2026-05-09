@@ -34,7 +34,8 @@ Qwen 当前只保留一条活跃主线：
 
 - `Stage J` 已达到 export-visible completion
 - `Stage K` 已切到唯一 `paper_consistent` release surface
-- 最终 release 面上的 correctness 与 `VMA / IMA / ISA` 仍需同口径复跑
+- 最终 release 面上的 correctness 与 `VMA / IMA / ISA` 已补齐
+- `IMA` 已区分为历史最小基线和论文口径 `paper_like` 重测；当前主线结论以 `paper_like` 为准
 
 Qwen 活跃阶段支撑文档：
 
